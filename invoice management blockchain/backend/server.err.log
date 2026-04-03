@@ -1,0 +1,30 @@
+AggregateError [ECONNREFUSED]: 
+    at C:\Users\Shantanu Vasagadekar\Desktop\invoice management blockchain\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Object.getSummary (C:\Users\Shantanu Vasagadekar\Desktop\invoice management blockchain\backend\src\services\dashboard.service.js:4:20)
+    at async summary (C:\Users\Shantanu Vasagadekar\Desktop\invoice management blockchain\backend\src\controllers\dashboard.controller.js:5:18) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:5432
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -4078,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 5432
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:5432
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -4078,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 5432
+    }
+  ]
+}
+Overdue job failed 
+Overdue job failed 
+Overdue job failed 
