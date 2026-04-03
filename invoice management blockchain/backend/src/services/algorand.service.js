@@ -1,13 +1,17 @@
 const {
   algodClient,
+  indexerClient,
   computeInvoiceHash,
   anchorInvoiceToAlgorand,
-  verifyInvoiceOnChain
+  verifyInvoiceOnChain,
+  verifyAlgorandTransaction
 } = require('./algorand')
 
 module.exports = {
   algodClient,
+  indexerClient,
   computeInvoiceHash,
   anchorInvoiceToAlgorand,
-  verifyInvoiceOnChain
+  verifyInvoiceOnChain,
+  verifyAlgorandTransaction
 }

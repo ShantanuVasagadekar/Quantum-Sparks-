@@ -3,9 +3,14 @@ const crypto = require('crypto')
 const { computeInvoiceHash } = require('../utils/invoice.util')
 
 const algodClient = new algosdk.Algodv2(
-  process.env.ALGORAND_ALGOD_TOKEN || '',
-  process.env.ALGORAND_ALGOD_SERVER || 'https://testnet-api.algonode.cloud',
-  process.env.ALGORAND_ALGOD_PORT || 443
+  process.env.ALGO_NODE_TOKEN || process.env.ALGORAND_ALGOD_TOKEN || '',
+  process.env.ALGO_NODE_URL || process.env.ALGORAND_ALGOD_SERVER || 'https://testnet-api.algonode.cloud',
+  process.env.ALGO_NODE_PORT || process.env.ALGORAND_ALGOD_PORT || 443
+)
+const indexerClient = new algosdk.Indexer(
+  process.env.ALGO_INDEXER_TOKEN || process.env.ALGORAND_INDEXER_TOKEN || '',
+  process.env.ALGO_INDEXER_URL || process.env.ALGORAND_INDEXER_SERVER || 'https://testnet-idx.algonode.cloud',
+  process.env.ALGO_INDEXER_PORT || process.env.ALGORAND_INDEXER_PORT || 443
 )
 
 /**
@@ -116,7 +121,57 @@ async function verifyInvoiceOnChain(txId, invoice, lineItems) {
 
 module.exports = {
   algodClient,
+  indexerClient,
   computeInvoiceHash,
   anchorInvoiceToAlgorand,
-  verifyInvoiceOnChain
+  verifyInvoiceOnChain,
+  verifyAlgorandTransaction
+}
+
+async function verifyAlgorandTransaction(txnId, expectedReceiver, expectedAmountMicroAlgos, invoiceId) {
+  const tx = await indexerClient.lookupTransactionByID(txnId).do()
+  const transaction = tx?.transaction
+  if (!transaction) {
+    const err = new Error('Transaction not found on Algorand network')
+    err.status = 400
+    throw err
+  }
+
+  const payment = transaction['payment-transaction']
+  if (!payment) {
+    const err = new Error('Transaction is not a payment transaction')
+    err.status = 400
+    throw err
+  }
+
+  const receiver = payment.receiver
+  const amount = Number(payment.amount || 0)
+  if (receiver !== expectedReceiver) {
+    const err = new Error('Invalid receiver address')
+    err.status = 400
+    throw err
+  }
+  if (amount !== Number(expectedAmountMicroAlgos)) {
+    const err = new Error('Invalid payment amount')
+    err.status = 400
+    throw err
+  }
+
+  const noteB64 = transaction.note
+  if (noteB64) {
+    const decoded = Buffer.from(noteB64, 'base64').toString('utf8')
+    const expected = Buffer.from(String(invoiceId), 'utf8').toString('base64')
+    if (noteB64 !== expected && decoded !== String(invoiceId)) {
+      const err = new Error('Invalid transaction note for invoice reference')
+      err.status = 400
+      throw err
+    }
+  }
+
+  return {
+    confirmed: transaction['confirmed-round'] > 0,
+    sender: transaction.sender,
+    receiver,
+    amount
+  }
 }

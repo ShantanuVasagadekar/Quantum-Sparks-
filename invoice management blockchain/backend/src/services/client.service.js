@@ -1,9 +1,22 @@
 const pool = require('../config/db')
 
-async function listClients(userId) {
+async function listClients(userId, search = '') {
+  const values = [userId]
+  let whereClause = 'user_id = $1'
+  if (search && search.trim()) {
+    values.push(`%${search.trim()}%`)
+    whereClause += ` AND (
+      name ILIKE $2
+      OR COALESCE(company_name, '') ILIKE $2
+      OR COALESCE(email, '') ILIKE $2
+      OR COALESCE(phone, '') ILIKE $2
+      OR COALESCE(city, '') ILIKE $2
+      OR COALESCE(state, '') ILIKE $2
+    )`
+  }
   const { rows } = await pool.query(
-    `SELECT * FROM clients WHERE user_id = $1 ORDER BY name ASC`,
-    [userId]
+    `SELECT * FROM clients WHERE ${whereClause} ORDER BY name ASC`,
+    values
   )
   return rows
 }

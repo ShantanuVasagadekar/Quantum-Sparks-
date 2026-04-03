@@ -1,7 +1,8 @@
 const pool = require('../config/db')
 const realtime = require('./realtime.service')
 const { resolveInvoiceStatus } = require('../utils/invoice.util')
-const { verifyInvoiceOnChain } = require('./algorand.service')
+const env = require('../config/env')
+const { verifyInvoiceOnChain, verifyAlgorandTransaction } = require('./algorand.service')
 
 async function listInvoicePayments(userId, invoiceId) {
   const invoiceCheck = await pool.query('SELECT id FROM invoices WHERE user_id = $1 AND id = $2', [userId, invoiceId])
@@ -198,5 +199,97 @@ module.exports = {
   listInvoicePayments,
   getPaymentById,
   recordPayment,
-  verifyChainPayment
+  verifyChainPayment,
+  recordCryptoPayment
+}
+
+async function recordCryptoPayment(userId, payload) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const invoiceRes = await client.query(
+      `SELECT * FROM invoices WHERE user_id = $1 AND id = $2 FOR UPDATE`,
+      [userId, payload.invoice_id]
+    )
+    const invoice = invoiceRes.rows[0]
+    if (!invoice) {
+      const err = new Error('Invoice not found')
+      err.status = 404
+      throw err
+    }
+
+    const outstandingAmount = Number(invoice.outstanding_amount)
+    if (outstandingAmount <= 0) {
+      const err = new Error('Invoice already fully paid')
+      err.status = 400
+      throw err
+    }
+
+    const expectedReceiver = env.anchorReceiver
+    if (!expectedReceiver) {
+      const err = new Error('Business Algorand wallet is not configured')
+      err.status = 400
+      throw err
+    }
+    const expectedAmountMicro = Math.round(outstandingAmount * 1_000_000)
+    const verification = await verifyAlgorandTransaction(
+      payload.txn_id,
+      expectedReceiver,
+      expectedAmountMicro,
+      payload.invoice_id
+    )
+
+    const paymentRes = await client.query(
+      `INSERT INTO payments (
+         invoice_id, user_id, amount, payment_date, payment_method,
+         reference_number, algo_tx_id, algo_sender_address, algo_verified, notes,
+         txn_id, source, status
+       )
+       VALUES ($1,$2,$3,$4,'algo',$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING *`,
+      [
+        payload.invoice_id,
+        userId,
+        outstandingAmount.toFixed(2),
+        new Date().toISOString(),
+        payload.txn_id,
+        payload.txn_id,
+        verification.sender || null,
+        Boolean(verification.confirmed),
+        'Algorand payment',
+        payload.txn_id,
+        'algorand',
+        verification.confirmed ? 'confirmed' : 'pending'
+      ]
+    )
+
+    const paidAmount = Number(invoice.paid_amount) + outstandingAmount
+    const nextStatus = resolveInvoiceStatus({
+      ...invoice,
+      paid_amount: paidAmount,
+      outstanding_amount: Number(invoice.total_amount) - paidAmount
+    })
+    const updateRes = await client.query(
+      `UPDATE invoices
+       SET paid_amount = $3,
+           status = $4::invoice_status,
+           paid_at = CASE WHEN $4::text = 'paid' THEN now() ELSE paid_at END,
+           updated_at = now()
+       WHERE user_id = $1 AND id = $2
+       RETURNING *`,
+      [userId, payload.invoice_id, paidAmount.toFixed(2), nextStatus]
+    )
+
+    await client.query('COMMIT')
+    return {
+      payment: paymentRes.rows[0],
+      invoice: updateRes.rows[0],
+      verification
+    }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }

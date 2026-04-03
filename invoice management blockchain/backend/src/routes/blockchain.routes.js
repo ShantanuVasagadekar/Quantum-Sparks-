@@ -6,5 +6,6 @@ const router = express.Router()
 
 router.post('/invoices/:id/anchor', invoiceController.anchor)
 router.get('/tx/:txId', blockchainController.txById)
+router.get('/vibekit/config', blockchainController.vibekitConfig)
 
 module.exports = router

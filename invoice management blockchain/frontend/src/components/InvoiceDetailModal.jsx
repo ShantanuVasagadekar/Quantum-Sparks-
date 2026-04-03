@@ -1,9 +1,16 @@
 import { useState } from 'react'
 import { formatCurrency, formatDate, formatDateTime } from '../utils/format'
 import { getToken } from '../api/auth'
+import api from '../api/client'
+import AlgoPaymentButton from './AlgoPaymentButton'
+import PaymentSourceBadge from './PaymentSourceBadge'
+import PaymentTimeline from './PaymentTimeline'
+import AlgorandBadge from './AlgorandBadge'
+import TxnLink from './TxnLink'
 
-function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, anchoring }) {
+function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, anchoring, onPaid }) {
   const [downloading, setDownloading] = useState(false)
+  const [reverifyingId, setReverifyingId] = useState('')
   const txId = invoice.anchor_tx_id || invoice.algo_anchor_tx_id
   const hash = invoice.anchor_hash || invoice.invoice_hash
   const explorerUrl = invoice.anchor_explorer_url || (txId ? `https://testnet.algoexplorer.io/tx/${txId}` : null)
@@ -34,6 +41,19 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
     }
   }
 
+  const reverifyPayment = async (payment) => {
+    const paymentTxnId = payment.txn_id || payment.algo_tx_id || payment.reference_number
+    try {
+      setReverifyingId(payment.id)
+      await api.post(`/payments/${payment.id}/verify-chain`, { algo_tx_id: paymentTxnId })
+      if (onPaid) await onPaid()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Unable to re-verify this transaction.')
+    } finally {
+      setReverifyingId('')
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl">
@@ -43,16 +63,10 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
             <p className="mt-1 text-sm font-medium text-gray-500">{invoice.invoice_number}</p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={handleDownloadPDF}
-              disabled={downloading}
-              className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
-            >
+            <button onClick={handleDownloadPDF} disabled={downloading} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
               {downloading ? 'Preparing PDF...' : 'Download PDF'}
             </button>
-            <button onClick={onClose} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-              Close
-            </button>
+            <button onClick={onClose} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Close</button>
           </div>
         </div>
 
@@ -78,6 +92,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
           </Section>
 
           <Section title="Payment History">
+            <div className="mb-3"><AlgoPaymentButton invoice={invoice} onPaid={onPaid} /></div>
             {payments && payments.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border border-gray-200">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -86,6 +101,10 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
                       <th className="py-3 pl-4 pr-3 font-semibold">Date</th>
                       <th className="py-3 px-3 font-semibold">Method</th>
                       <th className="py-3 px-3 font-semibold">Reference</th>
+                      <th className="py-3 px-3 font-semibold">Source</th>
+                      <th className="py-3 px-3 font-semibold">Status</th>
+                      <th className="py-3 px-3 font-semibold">Transaction</th>
+                      <th className="py-3 px-3 font-semibold">Action</th>
                       <th className="py-3 pl-3 pr-4 text-right font-semibold">Amount</th>
                     </tr>
                   </thead>
@@ -95,6 +114,16 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
                         <td className="py-3 pl-4 pr-3 text-gray-900">{formatDate(payment.payment_date)}</td>
                         <td className="py-3 px-3 text-gray-600 capitalize">{payment.payment_method || '-'}</td>
                         <td className="py-3 px-3 text-gray-600">{payment.reference_number || '-'}</td>
+                        <td className="py-3 px-3"><PaymentSourceBadge source={payment.source} method={payment.payment_method} /></td>
+                        <td className="py-3 px-3 text-gray-600 capitalize">{payment.status || (payment.algo_verified ? 'confirmed' : 'pending')}</td>
+                        <td className="py-3 px-3">{(payment.source === 'algorand' || payment.payment_method === 'algo') ? <TxnLink txnId={payment.txn_id || payment.algo_tx_id || payment.reference_number} /> : '-'}</td>
+                        <td className="py-3 px-3">
+                          {(payment.source === 'algorand' || payment.payment_method === 'algo') ? (
+                            <button onClick={() => reverifyPayment(payment)} disabled={reverifyingId === payment.id} className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-300 hover:bg-indigo-50 disabled:opacity-50">
+                              {reverifyingId === payment.id ? 'Re-verifying...' : 'Re-verify'}
+                            </button>
+                          ) : '-'}
+                        </td>
                         <td className="py-3 pl-3 pr-4 text-right font-medium text-gray-900">{formatCurrency(payment.amount)}</td>
                       </tr>
                     ))}
@@ -102,9 +131,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
                 </table>
               </div>
             ) : (
-              <div className="rounded-lg border border-gray-200 border-dashed p-6 text-center">
-                <p className="text-sm font-medium text-gray-500">No payment receipts have been recorded yet.</p>
-              </div>
+              <div className="rounded-lg border border-gray-200 border-dashed p-6 text-center"><p className="text-sm font-medium text-gray-500">No payment receipts have been recorded yet.</p></div>
             )}
           </Section>
 
@@ -112,12 +139,8 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="space-y-3 text-sm text-gray-600">
                 <p className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900">Current Status:</span> 
-                  {verified ? (
-                    <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20">Verified on Algorand</span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-semibold text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Unverified / Pending</span>
-                  )}
+                  <span className="font-medium text-gray-900">Current Status:</span>
+                  {verified ? <AlgorandBadge show /> : <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-semibold text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Unverified / Pending</span>}
                 </p>
                 <div className="break-all rounded bg-white p-2 border border-gray-200">
                   <span className="block text-xs font-semibold text-gray-500 mb-1">Transaction ID</span>
@@ -127,20 +150,10 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
                   <span className="block text-xs font-semibold text-gray-500 mb-1">Cryptographic Hash</span>
                   <span className="font-mono text-xs text-gray-800">{hash || '-'}</span>
                 </div>
-
                 <div className="pt-2 flex items-center justify-between">
-                  {explorerUrl ? (
-                    <a href={explorerUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-indigo-600 hover:text-indigo-500">
-                      View full block details on Explorer &rarr;
-                    </a>
-                  ) : <span />}
-                  
+                  {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-indigo-600 hover:text-indigo-500">View full block details on Explorer &rarr;</a> : <span />}
                   {!verified && (
-                    <button
-                      onClick={() => onAnchor(invoice.id)}
-                      disabled={anchoring}
-                      className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-                    >
+                    <button onClick={() => onAnchor(invoice.id)} disabled={anchoring} className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
                       {anchoring ? 'Verifying...' : 'Push Verification to Chain'}
                     </button>
                   )}
@@ -162,6 +175,9 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
               ))}
               {timeline.length === 0 && <p className="text-sm text-gray-500 italic">No historical events recorded.</p>}
             </div>
+          </Section>
+          <Section title="Payment Timeline">
+            <PaymentTimeline payments={payments} />
           </Section>
         </div>
       </div>

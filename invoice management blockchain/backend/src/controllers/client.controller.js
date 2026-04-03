@@ -16,7 +16,7 @@ const clientSchema = z.object({
 
 async function list(req, res, next) {
   try {
-    const data = await clientService.listClients(req.user.id)
+    const data = await clientService.listClients(req.user.id, req.query.search || '')
     res.json(data)
   } catch (error) {
     next(error)

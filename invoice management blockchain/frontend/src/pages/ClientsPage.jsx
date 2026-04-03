@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import api from '../api/client'
 import { SkeletonRow } from '../components/Skeletons'
 
 function ClientsPage({ refreshToken }) {
+  const location = useLocation()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -16,7 +18,9 @@ function ClientsPage({ refreshToken }) {
     async function load() {
       setLoading(true)
       try {
-        const res = await api.get('/clients')
+        const params = new URLSearchParams(location.search)
+        const search = params.get('search') || ''
+        const res = await api.get('/clients', { params: { search } })
         if (mounted) {
           setClients(res.data)
           setError('')
@@ -35,7 +39,7 @@ function ClientsPage({ refreshToken }) {
     return () => {
       mounted = false
     }
-  }, [refreshToken])
+  }, [refreshToken, location.search])
 
   async function handleCreateClient(e) {
     e.preventDefault()
@@ -113,8 +117,14 @@ function ClientsPage({ refreshToken }) {
           </div>
         ) : clients.length === 0 ? (
           <div className="py-12 text-center">
-            <p className="text-base font-medium text-gray-700">No clients added yet</p>
-            <p className="text-sm text-gray-400">Add a client while creating your first invoice.</p>
+            <p className="text-base font-medium text-gray-700">
+              {(new URLSearchParams(location.search).get('search') || '').trim() ? 'No results found' : 'No clients added yet'}
+            </p>
+            <p className="text-sm text-gray-400">
+              {(new URLSearchParams(location.search).get('search') || '').trim()
+                ? 'Try a different keyword.'
+                : 'Add a client while creating your first invoice.'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -133,6 +143,7 @@ function ClientsPage({ refreshToken }) {
                   <tr key={client.id} className="transition-colors hover:bg-gray-50/50">
                     <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{client.name}</td>
                     <td className="py-4 px-4 text-gray-600">{client.company_name || '-'}</td>
+                    <td className="py-4 px-4 text-gray-500">{client.phone || '-'}</td>
                     <td className="py-4 px-4 text-gray-500">{client.state || '-'}</td>
                     <td className="py-4 px-4 text-gray-500">{client.email || '-'}</td>
                   </tr>

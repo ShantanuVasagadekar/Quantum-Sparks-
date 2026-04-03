@@ -15,6 +15,7 @@ function DashboardPage({ refreshToken }) {
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [anchoring, setAnchoring] = useState(false)
   const [copiedInvoiceId, setCopiedInvoiceId] = useState('')
+  const [seeding, setSeeding] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -92,6 +93,25 @@ function DashboardPage({ refreshToken }) {
     }
   }
 
+  async function seedDemoData() {
+    try {
+      setSeeding(true)
+      setError('')
+      await api.post('/admin/seed-demo', { clients: 50, invoices: 300, maxPayments: 4 })
+      const [summaryRes, invoicesRes] = await Promise.all([
+        api.get('/dashboard/summary'),
+        api.get('/invoices')
+      ])
+      setSummary(summaryRes.data)
+      setInvoices(invoicesRes.data)
+      alert('Demo data generated successfully.')
+    } catch (err) {
+      setError(err.response?.data?.error || 'Unable to generate demo data.')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   const outstandingInvoices = useMemo(
     () => invoices.filter((invoice) => Number(invoice.outstanding_amount) > 0 && invoice.status !== 'cancelled').slice(0, 8),
     [invoices]
@@ -127,6 +147,13 @@ function DashboardPage({ refreshToken }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+        <button
+          onClick={seedDemoData}
+          disabled={seeding}
+          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+        >
+          {seeding ? 'Generating...' : 'Generate Demo Data'}
+        </button>
       </div>
 
       {error && (

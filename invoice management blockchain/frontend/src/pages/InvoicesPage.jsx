@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import api from '../api/client'
 import InvoiceDetailModal from '../components/InvoiceDetailModal'
 import PaymentModal from '../components/PaymentModal'
 import StatusBadge from '../components/StatusBadge'
+import AlgorandBadge from '../components/AlgorandBadge'
+import TxnLink from '../components/TxnLink'
 import { formatCurrency, formatDate } from '../utils/format'
 
 function InvoicesPage({ refreshToken }) {
+  const location = useLocation()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
@@ -18,12 +22,14 @@ function InvoicesPage({ refreshToken }) {
 
   useEffect(() => {
     fetchInvoices().catch(() => {})
-  }, [refreshToken])
+  }, [refreshToken, location.search])
 
   async function fetchInvoices() {
     setLoading(true)
     try {
-      const res = await api.get('/invoices')
+      const params = new URLSearchParams(location.search)
+      const search = params.get('search') || ''
+      const res = await api.get('/invoices', { params: { search } })
       setInvoices(res.data)
       setError('')
     } catch (err) {
@@ -114,7 +120,11 @@ function InvoicesPage({ refreshToken }) {
       <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <div className="px-6 py-10 text-center">
-            <p className="text-sm font-medium text-gray-400">No invoices available. Create an invoice to start tracking receivables.</p>
+            <p className="text-sm font-medium text-gray-400">
+              {(new URLSearchParams(location.search).get('search') || '').trim()
+                ? 'No results found for your search.'
+                : 'No invoices available. Create an invoice to start tracking receivables.'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -128,6 +138,7 @@ function InvoicesPage({ refreshToken }) {
                   <th className="py-3 px-4 text-right font-semibold">Received</th>
                   <th className="py-3 px-4 text-right font-semibold">Pending</th>
                   <th className="py-3 px-4 font-semibold">Status</th>
+                  <th className="py-3 px-4 font-semibold">Blockchain</th>
                   <th className="py-3 px-6 font-semibold">Actions</th>
                 </tr>
               </thead>
@@ -141,6 +152,16 @@ function InvoicesPage({ refreshToken }) {
                     <td className="py-4 px-4 text-right text-gray-500">{formatCurrency(invoice.paid_amount)}</td>
                     <td className="py-4 px-4 text-right font-medium text-gray-900">{formatCurrency(invoice.outstanding_amount)}</td>
                     <td className="py-4 px-4"><StatusBadge status={invoice.status} /></td>
+                    <td className="py-4 px-4">
+                      {invoice.algo_anchor_tx_id || invoice.anchor_tx_id ? (
+                        <div className="flex items-center gap-2">
+                          <AlgorandBadge show />
+                          <TxnLink txnId={invoice.algo_anchor_tx_id || invoice.anchor_tx_id} />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Not anchored</span>
+                      )}
+                    </td>
                     <td className="py-4 px-6">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -192,6 +213,10 @@ function InvoicesPage({ refreshToken }) {
           payments={detailPayments}
           anchoring={anchoring}
           onAnchor={verifyInvoice}
+          onPaid={async () => {
+            await fetchInvoices()
+            await openDetail(detailInvoice.id)
+          }}
           onClose={() => {
             setDetailInvoice(null)
             setDetailTimeline([])

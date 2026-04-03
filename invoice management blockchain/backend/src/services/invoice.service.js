@@ -1,7 +1,7 @@
 const pool = require('../config/db')
 const env = require('../config/env')
 const realtime = require('./realtime.service')
-const { resolveInvoiceStatus } = require('../utils/invoice.util')
+const { resolveInvoiceStatus, computeInvoiceHash } = require('../utils/invoice.util')
 const { anchorInvoiceToAlgorand } = require('./algorand.service')
 const mailer = require('./mailer.service')
 
@@ -27,6 +27,15 @@ async function listInvoices(userId, filters) {
   }
   if (filters.overdue === 'true') {
     conditions.push(`i.due_date < current_date AND i.outstanding_amount > 0 AND i.is_cancelled = false`)
+  }
+  if (filters.search) {
+    values.push(`%${filters.search.trim()}%`)
+    conditions.push(`(
+      i.invoice_number ILIKE $${values.length}
+      OR COALESCE(i.title, '') ILIKE $${values.length}
+      OR COALESCE(i.description, '') ILIKE $${values.length}
+      OR c.name ILIKE $${values.length}
+    )`)
   }
 
   const { rows } = await pool.query(
@@ -259,6 +268,27 @@ async function createInvoice(userId, payload) {
       `INSERT INTO invoice_events (invoice_id, event_type, event_payload)
        VALUES ($1, 'invoice.created', $2::jsonb)`,
       [invoice.id, JSON.stringify({ invoice_id: invoice.id, status: invoice.status })]
+    )
+
+    const insertedLineItemsRes = await clientConn.query(
+      `SELECT description, quantity, unit_price
+       FROM invoice_line_items
+       WHERE invoice_id = $1
+       ORDER BY sort_order ASC, created_at ASC`,
+      [invoice.id]
+    )
+    const hash = computeInvoiceHash(invoice, insertedLineItemsRes.rows)
+    const mockTxId = `PENDING_${Date.now()}_${Math.floor(Math.random() * 10000)}`
+    await clientConn.query(
+      `UPDATE invoices
+       SET invoice_hash = $2,
+           anchor_hash = $2,
+           algo_anchor_tx_id = $3,
+           anchor_tx_id = $3,
+           algo_anchor_status = 'pending_anchor',
+           updated_at = now()
+       WHERE id = $1`,
+      [invoice.id, hash, mockTxId]
     )
 
     await clientConn.query('COMMIT')
@@ -772,12 +802,22 @@ async function getInvoicePdfData(userId, invoiceId) {
     notes: invoice.notes || ''
   }
 
+  const metadataBusiness = invoice.metadata?.business || {}
+  const mergedBusiness = {
+    company_name: metadataBusiness.business_name || business.company_name,
+    address: metadataBusiness.address || business.address,
+    city_state_zip: metadataBusiness.city_state_zip || business.city_state_zip,
+    phone: metadataBusiness.phone || business.phone,
+    email: metadataBusiness.email || business.email,
+    gst_number: metadataBusiness.gst_number || business.gst_number,
+  }
+
   return {
     invoice,
     client,
     lineItems: lineItemsRes.rows,
     payments: paymentsRes.rows,
-    business
+    business: mergedBusiness
   }
 }
 

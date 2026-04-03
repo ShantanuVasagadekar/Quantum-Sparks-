@@ -16,6 +16,10 @@ const verifySchema = z.object({
   algo_tx_id: z.string().optional(),
   algo_sender_address: z.string().optional()
 })
+const cryptoPaymentSchema = z.object({
+  invoice_id: z.string().uuid(),
+  txn_id: z.string().min(1)
+})
 
 async function listInvoicePayments(req, res, next) {
   try {
@@ -56,9 +60,20 @@ async function verifyChain(req, res, next) {
   }
 }
 
+async function createCryptoPayment(req, res, next) {
+  try {
+    const payload = cryptoPaymentSchema.parse(req.body || {})
+    const data = await paymentService.recordCryptoPayment(req.user.id, payload)
+    res.status(201).json(data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   listInvoicePayments,
   createInvoicePayment,
   getPayment,
-  verifyChain
+  verifyChain,
+  createCryptoPayment
 }

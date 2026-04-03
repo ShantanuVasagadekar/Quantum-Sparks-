@@ -45,18 +45,15 @@ const invoiceUpdateSchema = z.object({
 
 async function list(req, res, next) {
   try {
-    console.log('[invoices.list] user', req.user.id, 'query', req.query)
     const data = await invoiceService.listInvoices(req.user.id, req.query)
     res.json(data)
   } catch (error) {
-    console.error('[invoices.list] failed', error)
     res.status(error.status || 500).json({ error: error.message || 'Failed to fetch invoices' })
   }
 }
 
 async function create(req, res, next) {
   try {
-    console.log('[invoices.create] user', req.user.id, 'body', req.body)
     const payload = invoiceCreateSchema.parse(req.body)
     for (const item of payload.line_items) {
       if (!item.description || Number.isNaN(item.quantity) || Number.isNaN(item.unit_price)) {
@@ -66,7 +63,6 @@ async function create(req, res, next) {
     const data = await invoiceService.createInvoice(req.user.id, payload)
     res.status(201).json(data)
   } catch (error) {
-    console.error('[invoices.create] failed', error)
     if (error && error.issues) {
       return res.status(400).json({ error: 'Validation error', details: error.issues })
     }

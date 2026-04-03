@@ -1,0 +1,6 @@
+ALTER TABLE payments
+ADD COLUMN IF NOT EXISTS txn_id TEXT,
+ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual',
+ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_payments_txn_id ON payments(txn_id);

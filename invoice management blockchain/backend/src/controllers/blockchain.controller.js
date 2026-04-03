@@ -1,4 +1,5 @@
 const { algodClient } = require('../services/algorand.service')
+const { getVibeKitConfig } = require('../services/vibekit.service')
 
 async function txById(req, res, next) {
   try {
@@ -9,6 +10,11 @@ async function txById(req, res, next) {
   }
 }
 
+function vibekitConfig(req, res) {
+  res.json(getVibeKitConfig())
+}
+
 module.exports = {
-  txById
+  txById,
+  vibekitConfig
 }

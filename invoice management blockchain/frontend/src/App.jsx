@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage'
 import InvoicesPage from './pages/InvoicesPage'
 import LoginPage from './pages/LoginPage'
 import ProfilePage from './pages/ProfilePage'
+import TopBar from './components/TopBar'
 
 const Icons = {
   Home: () => (
@@ -80,25 +81,7 @@ function App() {
 
               {/* Main content wrapper */}
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                {/* Header Topbar */}
-                <header className="h-16 flex-shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
-                  <div className="flex-1 flex items-center">
-                    <div className="relative w-96">
-                      <input 
-                        type="text" 
-                        placeholder="Search invoices or clients..." 
-                        className="w-full h-9 rounded-md border border-gray-300 pl-10 pr-4 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-gray-900 placeholder-gray-500" 
-                        disabled 
-                      />
-                      <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <NavLink to="/profile" className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200 hover:bg-indigo-200 transition-colors" title="My Profile">
-                      <span className="text-sm font-medium text-indigo-700">⚙️</span>
-                    </NavLink>
-                  </div>
-                </header>
+                <TopBar />
 
                 {/* Main Content Area */}
                 <main className="flex-1 overflow-auto">

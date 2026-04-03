@@ -15,11 +15,29 @@ function InvoiceForm({ onSuccess }) {
     issue_date: new Date().toISOString().slice(0, 10),
     due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
     discount_amount: 0,
+    business_name: '',
+    gst_number: '',
+    address: '',
+    email: '',
+    phone: '',
+    default_gst_percent: 18,
+    terms: '',
+    notes: '',
     line_items: [initialLineItem]
   })
 
   useEffect(() => {
     api.get('/clients').then((res) => setClients(res.data)).catch(() => setClients([]))
+    api.get('/auth/me').then((res) => {
+      setForm((prev) => ({
+        ...prev,
+        business_name: res.data.business_name || '',
+        gst_number: res.data.gst_number || '',
+        address: res.data.address || '',
+        email: res.data.email || '',
+        phone: res.data.phone || '',
+      }))
+    }).catch(() => {})
   }, [])
 
   const subtotal = form.line_items.reduce(
@@ -50,7 +68,18 @@ function InvoiceForm({ onSuccess }) {
           quantity: Number(item.quantity),
           unit_price: Number(item.unit_price),
           gst_percent: Number(item.gst_percent)
-        }))
+        })),
+        metadata: {
+          notes: form.notes || null,
+          terms: form.terms || null,
+          business: {
+            business_name: form.business_name || null,
+            gst_number: form.gst_number || null,
+            address: form.address || null,
+            email: form.email || null,
+            phone: form.phone || null,
+          }
+        }
       }
 
       await api.post('/invoices', payload)
@@ -156,6 +185,42 @@ function InvoiceForm({ onSuccess }) {
           >
             + Add Line Item
           </button>
+        </div>
+      </FormSection>
+
+      <FormSection title="Business + Tax + Terms">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Business Name" required>
+            <input required value={form.business_name} onChange={(e) => setForm((prev) => ({ ...prev, business_name: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="GST Number">
+            <input value={form.gst_number} onChange={(e) => setForm((prev) => ({ ...prev, gst_number: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Business Email">
+            <input type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Business Phone">
+            <input value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Business Address" className="md:col-span-2">
+            <input value={form.address} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Default GST %" className="md:col-span-2">
+            <input type="number" min="0" step="1" value={form.default_gst_percent} onChange={(e) => {
+              const next = Number(e.target.value || 0)
+              setForm((prev) => ({
+                ...prev,
+                default_gst_percent: next,
+                line_items: prev.line_items.map((item) => ({ ...item, gst_percent: next }))
+              }))
+            }} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Notes" className="md:col-span-2">
+            <textarea rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Terms" className="md:col-span-2">
+            <textarea rows={3} value={form.terms} onChange={(e) => setForm((prev) => ({ ...prev, terms: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
         </div>
       </FormSection>
 
