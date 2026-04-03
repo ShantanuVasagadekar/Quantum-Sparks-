@@ -35,111 +35,132 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-xl border border-slate-700 bg-slate-900 p-5">
-        <div className="mb-4 flex items-center justify-between border-b border-slate-700 pb-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/95 px-6 py-4 backdrop-blur">
           <div>
-            <h3 className="text-lg font-semibold text-white">Invoice Detail</h3>
-            <p className="mt-1 text-sm text-slate-400">{invoice.invoice_number}</p>
+            <h3 className="text-xl font-bold text-gray-900">Invoice Details</h3>
+            <p className="mt-1 text-sm font-medium text-gray-500">{invoice.invoice_number}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
             >
-              {downloading ? 'Generating PDF...' : 'Download PDF'}
+              {downloading ? 'Preparing PDF...' : 'Download PDF'}
             </button>
-            <button onClick={onClose} className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+            <button onClick={onClose} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
               Close
             </button>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <Section title="Invoice Information">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="space-y-6 p-6">
+          <Section title="Financial Snapshot">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <InfoItem label="Client" value={invoice.client_name || '-'} />
               <InfoItem label="Issue Date" value={formatDate(invoice.issue_date || invoice.created_at)} />
               <InfoItem label="Due Date" value={formatDate(invoice.due_date)} />
-              <InfoItem label="Total" value={formatCurrency(invoice.total_amount)} />
-              <InfoItem label="Amount Received" value={formatCurrency(invoice.paid_amount)} />
-              <InfoItem label="Amount Pending" value={formatCurrency(invoice.outstanding_amount)} />
+              <InfoItem label="Total Base Amount" value={formatCurrency(invoice.total_amount)} />
+              <InfoItem label="Amount Received" value={formatCurrency(invoice.paid_amount)} highlight="green" />
+              <InfoItem label="Amount Pending" value={formatCurrency(invoice.outstanding_amount)} highlight="red" />
             </div>
           </Section>
 
-          <Section title="Client Details">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Section title="Client Contact Information">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <InfoItem label="Client Name" value={invoice.client_name || '-'} />
               <InfoItem label="Email" value={invoice.client_email || '-'} />
               <InfoItem label="Phone" value={invoice.client_phone || '-'} />
-              <InfoItem label="Status" value={invoice.status || '-'} />
+              <InfoItem label="Status Label" value={invoice.status || '-'} />
             </div>
           </Section>
 
           <Section title="Payment History">
             {payments && payments.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead>
-                    <tr className="border-b border-slate-700 text-left text-slate-400">
-                      <th className="pb-2 pr-4">Date</th>
-                      <th className="pb-2 pr-4">Method</th>
-                      <th className="pb-2 pr-4">Reference</th>
-                      <th className="pb-2 text-right">Amount</th>
+                    <tr className="bg-gray-50 text-left text-gray-500">
+                      <th className="py-3 pl-4 pr-3 font-semibold">Date</th>
+                      <th className="py-3 px-3 font-semibold">Method</th>
+                      <th className="py-3 px-3 font-semibold">Reference</th>
+                      <th className="py-3 pl-3 pr-4 text-right font-semibold">Amount</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-200 bg-white">
                     {payments.map((payment) => (
-                      <tr key={payment.id} className="border-b border-slate-800">
-                        <td className="py-2 pr-4 text-slate-300">{formatDate(payment.payment_date)}</td>
-                        <td className="py-2 pr-4 text-slate-300">{payment.payment_method || '-'}</td>
-                        <td className="py-2 pr-4 text-slate-300">{payment.reference_number || '-'}</td>
-                        <td className="py-2 text-right text-slate-100">{formatCurrency(payment.amount)}</td>
+                      <tr key={payment.id}>
+                        <td className="py-3 pl-4 pr-3 text-gray-900">{formatDate(payment.payment_date)}</td>
+                        <td className="py-3 px-3 text-gray-600 capitalize">{payment.payment_method || '-'}</td>
+                        <td className="py-3 px-3 text-gray-600">{payment.reference_number || '-'}</td>
+                        <td className="py-3 pl-3 pr-4 text-right font-medium text-gray-900">{formatCurrency(payment.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">No payments recorded.</p>
+              <div className="rounded-lg border border-gray-200 border-dashed p-6 text-center">
+                <p className="text-sm font-medium text-gray-500">No payment receipts have been recorded yet.</p>
+              </div>
             )}
           </Section>
 
-          <Section title="Verification Status">
-            <div className="space-y-2 text-sm text-slate-300">
-              <p>
-                Current Status: <span className="font-medium text-white">{verified ? 'Verified on Algorand' : 'Unverified'}</span>
-              </p>
-              <p className="break-all">Transaction ID: <span className="font-mono text-xs text-slate-200">{txId || '-'}</span></p>
-              <p className="break-all">Hash: <span className="font-mono text-xs text-slate-200">{hash || '-'}</span></p>
-              {explorerUrl && (
-                <a href={explorerUrl} target="_blank" rel="noreferrer" className="inline-block text-sm text-slate-300 underline">
-                  View Transaction
-                </a>
-              )}
-              {!verified && (
-                <button
-                  onClick={() => onAnchor(invoice.id)}
-                  disabled={anchoring}
-                  className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-white disabled:opacity-50"
-                >
-                  {anchoring ? 'Verifying...' : 'Verify Invoice'}
-                </button>
-              )}
+          <Section title="Blockchain Verification">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="space-y-3 text-sm text-gray-600">
+                <p className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">Current Status:</span> 
+                  {verified ? (
+                    <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20">Verified on Algorand</span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-semibold text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Unverified / Pending</span>
+                  )}
+                </p>
+                <div className="break-all rounded bg-white p-2 border border-gray-200">
+                  <span className="block text-xs font-semibold text-gray-500 mb-1">Transaction ID</span>
+                  <span className="font-mono text-xs text-gray-800">{txId || '-'}</span>
+                </div>
+                <div className="break-all rounded bg-white p-2 border border-gray-200">
+                  <span className="block text-xs font-semibold text-gray-500 mb-1">Cryptographic Hash</span>
+                  <span className="font-mono text-xs text-gray-800">{hash || '-'}</span>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  {explorerUrl ? (
+                    <a href={explorerUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-indigo-600 hover:text-indigo-500">
+                      View full block details on Explorer &rarr;
+                    </a>
+                  ) : <span />}
+                  
+                  {!verified && (
+                    <button
+                      onClick={() => onAnchor(invoice.id)}
+                      disabled={anchoring}
+                      className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {anchoring ? 'Verifying...' : 'Push Verification to Chain'}
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </Section>
 
-          <Section title="Timeline">
-            <div className="space-y-2">
+          <Section title="Audit Timeline">
+            <div className="space-y-4">
               {timeline.map((item, index) => (
-                <div key={`${item.type}-${item.at}-${index}`} className="rounded-md border border-slate-700 bg-slate-800 p-3">
-                  <p className="text-sm font-medium text-white">{item.label}</p>
-                  <p className="text-xs text-slate-400">{formatDateTime(item.at)}</p>
-                  <TimelineMeta meta={item.meta} />
+                <div key={`${item.type}-${item.at}-${index}`} className="relative pl-6 before:absolute before:left-2 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-indigo-500 after:absolute after:bottom-[-16px] after:left-[11px] after:top-[12px] after:w-px after:bg-gray-200 last:after:hidden">
+                  <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-900">{item.label}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">{formatDateTime(item.at)}</p>
+                    <TimelineMeta meta={item.meta} />
+                  </div>
                 </div>
               ))}
-              {timeline.length === 0 && <p className="text-sm text-slate-400">No timeline events available.</p>}
+              {timeline.length === 0 && <p className="text-sm text-gray-500 italic">No historical events recorded.</p>}
             </div>
           </Section>
         </div>
@@ -150,18 +171,21 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
 
 function Section({ title, children }) {
   return (
-    <section className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-      <h4 className="mb-3 text-sm font-semibold text-white">{title}</h4>
+    <section>
+      <h4 className="mb-3 text-sm font-bold tracking-wide text-gray-900 uppercase">{title}</h4>
       {children}
     </section>
   )
 }
 
-function InfoItem({ label, value }) {
+function InfoItem({ label, value, highlight }) {
+  const isGreen = highlight === 'green'
+  const isRed = highlight === 'red'
+  
   return (
-    <div className="rounded-md border border-slate-700 bg-slate-900 p-3">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-100">{value}</p>
+    <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm ${isGreen ? 'border-green-200' : ''} ${isRed ? 'border-red-200' : ''}`}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
+      <p className={`mt-1 text-lg font-bold ${isGreen ? 'text-green-700' : isRed ? 'text-red-700' : 'text-gray-900'}`}>{value}</p>
     </div>
   )
 }
@@ -172,9 +196,9 @@ function TimelineMeta({ meta }) {
   if (entries.length === 0) return null
 
   return (
-    <div className="mt-2 flex flex-wrap gap-2">
+    <div className="mt-3 flex flex-wrap gap-2">
       {entries.map(([key, value]) => (
-        <span key={key} className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-[11px] text-slate-300">
+        <span key={key} className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
           {key}: {key.includes('amount') ? formatCurrency(value) : String(value)}
         </span>
       ))}

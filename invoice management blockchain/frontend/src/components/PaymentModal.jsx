@@ -34,16 +34,16 @@ function PaymentModal({ invoice, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-5">
-        <h3 className="text-lg font-semibold text-white">Add Payment</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          {invoice.invoice_number} | Amount Pending {formatCurrency(invoice.outstanding_amount)}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
+      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+        <h3 className="text-xl font-bold text-gray-900">Record Payment</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Invoice <span className="font-semibold text-gray-700">{invoice.invoice_number}</span> &mdash; Pending <span className="font-semibold text-red-600">{formatCurrency(invoice.outstanding_amount)}</span>
         </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="text-sm text-slate-300">
-            <span className="mb-1 block">Amount</span>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="block text-sm font-medium text-gray-900">
+            <span className="mb-1 block">Payment Amount</span>
             <input
               type="number"
               min="0"
@@ -51,58 +51,65 @@ function PaymentModal({ invoice, onClose, onSaved }) {
               required
               value={form.amount}
               onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100"
+              placeholder="0.00"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </label>
 
-          <label className="text-sm text-slate-300">
+          <label className="block text-sm font-medium text-gray-900">
             <span className="mb-1 block">Payment Method</span>
             <select
               value={form.payment_method}
               onChange={(e) => setForm((prev) => ({ ...prev, payment_method: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             >
-              <option value="bank">Bank</option>
-              <option value="upi">UPI</option>
+              <option value="bank">Bank Transfer</option>
+              <option value="upi">UPI / Mobile</option>
               <option value="cash">Cash</option>
-              <option value="algo">Algo</option>
-              <option value="manual">Manual</option>
+              <option value="algo">Algorand / Crypto</option>
+              <option value="manual">Manual / Other</option>
             </select>
           </label>
 
-          <label className="text-sm text-slate-300 sm:col-span-2">
-            <span className="mb-1 block">Reference Number</span>
+          <label className="block text-sm font-medium text-gray-900 sm:col-span-2">
+            <span className="mb-1 block">Reference Number (Optional)</span>
             <input
               type="text"
+              placeholder="e.g. TXN-12345"
               value={form.reference_number}
               onChange={(e) => setForm((prev) => ({ ...prev, reference_number: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </label>
 
-          <label className="text-sm text-slate-300 sm:col-span-2">
-            <span className="mb-1 block">Notes</span>
+          <label className="block text-sm font-medium text-gray-900 sm:col-span-2">
+            <span className="mb-1 block">Internal Notes</span>
             <textarea
               rows={3}
+              placeholder="Wire transfer cleared on Wednesday..."
               value={form.notes}
               onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </label>
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+        {error && (
+          <div className="mt-4 rounded-md bg-red-50 p-3 shadow-sm border border-red-200">
+            <p className="text-sm font-medium text-red-700">{error}</p>
+          </div>
+        )}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">
+        <div className="mt-8 flex items-center justify-end gap-3 border-t border-gray-200 pt-5">
+          <button type="button" onClick={onClose} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-white disabled:opacity-60"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
           >
-            {loading ? 'Saving...' : 'Save Payment'}
+            {loading ? 'Processing...' : 'Confirm Payment Receipt'}
           </button>
         </div>
       </form>

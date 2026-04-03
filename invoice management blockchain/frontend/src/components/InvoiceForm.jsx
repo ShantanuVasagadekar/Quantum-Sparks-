@@ -65,16 +65,16 @@ function InvoiceForm({ onSuccess }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-5">
-      <FormSection title="Client">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <FormSection title="Client Details">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Client Name" required>
             <input
               required
               value={form.client_name || ''}
               onChange={(e) => setForm((prev) => ({ ...prev, client_name: e.target.value }))}
               placeholder="e.g. Acme Labs"
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder-gray-400"
             />
           </Field>
 
@@ -83,7 +83,7 @@ function InvoiceForm({ onSuccess }) {
               required
               value={form.invoice_number}
               onChange={(e) => setForm((prev) => ({ ...prev, invoice_number: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </Field>
 
@@ -91,23 +91,23 @@ function InvoiceForm({ onSuccess }) {
             <input
               value={form.title}
               onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               placeholder="Monthly consulting services"
             />
           </Field>
         </div>
       </FormSection>
 
-      <FormSection title="Items">
+      <FormSection title="Line Items">
         <div className="space-y-3">
           {form.line_items.map((item, index) => (
-            <div key={`${index}-${item.description}`} className="grid grid-cols-1 gap-3 rounded-md border border-slate-700 bg-slate-800 p-3 md:grid-cols-4">
+            <div key={`${index}-${item.description}`} className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 bg-gray-50/50 p-4 md:grid-cols-4">
               <Field label="Description" required className="md:col-span-2">
                 <input
                   required
                   value={item.description}
                   onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </Field>
 
@@ -119,7 +119,7 @@ function InvoiceForm({ onSuccess }) {
                   required
                   value={item.quantity}
                   onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </Field>
 
@@ -131,7 +131,7 @@ function InvoiceForm({ onSuccess }) {
                   required
                   value={item.unit_price}
                   onChange={(e) => updateLineItem(index, 'unit_price', e.target.value)}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </Field>
             </div>
@@ -140,21 +140,21 @@ function InvoiceForm({ onSuccess }) {
           <button
             type="button"
             onClick={() => setForm((prev) => ({ ...prev, line_items: [...prev.line_items, { ...initialLineItem }] }))}
-            className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+            className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 mt-2"
           >
-            Add Line Item
+            + Add Line Item
           </button>
         </div>
       </FormSection>
 
-      <FormSection title="Summary">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <FormSection title="Summary & Dates">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Issue Date">
             <input
               type="date"
               value={form.issue_date}
               onChange={(e) => setForm((prev) => ({ ...prev, issue_date: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </Field>
 
@@ -164,7 +164,7 @@ function InvoiceForm({ onSuccess }) {
               required
               value={form.due_date}
               onChange={(e) => setForm((prev) => ({ ...prev, due_date: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </Field>
 
@@ -175,7 +175,7 @@ function InvoiceForm({ onSuccess }) {
               step="0.01"
               value={form.tax_amount}
               onChange={(e) => setForm((prev) => ({ ...prev, tax_amount: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </Field>
 
@@ -186,32 +186,32 @@ function InvoiceForm({ onSuccess }) {
               step="0.01"
               value={form.discount_amount}
               onChange={(e) => setForm((prev) => ({ ...prev, discount_amount: e.target.value }))}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
           </Field>
         </div>
 
-        <div className="mt-3 rounded-md border border-slate-700 bg-slate-800 p-4">
-          <div className="flex items-center justify-between text-sm text-slate-300">
+        <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-5">
+          <div className="flex items-center justify-between text-sm text-gray-600">
             <span>Subtotal</span>
-            <span>₹ {subtotal.toFixed(2)}</span>
+            <span className="font-medium text-gray-900">₹ {subtotal.toFixed(2)}</span>
           </div>
-          <div className="mt-2 flex items-center justify-between text-xl font-semibold text-white">
+          <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-3 text-lg font-bold text-gray-900">
             <span>Total</span>
             <span>₹ {total.toFixed(2)}</span>
           </div>
         </div>
       </FormSection>
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end border-t border-gray-200 pt-5">
         <button
           type="submit"
           disabled={loading}
-          className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-white disabled:opacity-50"
+          className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
         >
-          {loading ? 'Submitting...' : 'Create Invoice'}
+          {loading ? 'Saving Invoice...' : 'Save & Publish Invoice'}
         </button>
       </div>
     </form>
@@ -220,19 +220,21 @@ function InvoiceForm({ onSuccess }) {
 
 function FormSection({ title, children }) {
   return (
-    <section className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-      <div className="mt-3">{children}</div>
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4">
+        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+      </div>
+      <div className="p-6">{children}</div>
     </section>
   )
 }
 
 function Field({ label, required, className = '', children }) {
   return (
-    <label className={`text-sm text-slate-300 ${className}`}>
-      <span className="mb-1 block">
+    <label className={`block text-sm font-medium leading-6 text-gray-900 ${className}`}>
+      <span className="mb-1.5 block">
         {label}
-        {required ? <span className="text-red-300"> *</span> : null}
+        {required ? <span className="text-red-500 ml-1">*</span> : null}
       </span>
       {children}
     </label>

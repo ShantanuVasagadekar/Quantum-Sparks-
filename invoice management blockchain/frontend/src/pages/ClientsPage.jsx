@@ -54,22 +54,22 @@ function ClientsPage({ refreshToken }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
-                  <th className="pb-2">Name</th>
-                  <th className="pb-2">Company</th>
-                  <th className="pb-2">Phone</th>
-                  <th className="pb-2">Email</th>
+                <tr className="bg-gray-50/50 text-left text-gray-500">
+                  <th className="py-3 pl-6 pr-4 font-semibold">Name</th>
+                  <th className="py-3 px-4 font-semibold">Company</th>
+                  <th className="py-3 px-4 font-semibold">Phone</th>
+                  <th className="py-3 px-4 font-semibold">Email</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {clients.map((client) => (
-                  <tr key={client.id} className="border-b border-gray-100">
-                    <td className="py-3 font-medium text-gray-900">{client.name}</td>
-                    <td className="py-3 text-gray-700">{client.company_name || '-'}</td>
-                    <td className="py-3 text-gray-700">{client.phone || '-'}</td>
-                    <td className="py-3 text-gray-700">{client.email || '-'}</td>
+                  <tr key={client.id} className="transition-colors hover:bg-gray-50/50">
+                    <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{client.name}</td>
+                    <td className="py-4 px-4 text-gray-600">{client.company_name || '-'}</td>
+                    <td className="py-4 px-4 text-gray-500">{client.phone || '-'}</td>
+                    <td className="py-4 px-4 text-gray-500">{client.email || '-'}</td>
                   </tr>
                 ))}
               </tbody>

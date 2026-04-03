@@ -29,67 +29,84 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-6">
-        <h1 className="mb-1 text-2xl font-semibold text-white">
-          {isSignup ? 'Create Account' : 'Sign In'}
-        </h1>
-        <p className="mb-6 text-sm text-slate-400">
-          {isSignup ? 'Register to start tracking invoices' : 'Enter your credentials'}
-        </p>
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 font-sans text-gray-900">
+      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-xl">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600 shadow-sm">
+            <span className="text-xl font-bold text-white">IM</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            {isSignup ? 'Create Account' : 'Welcome back'}
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            {isSignup ? 'Register to start tracking invoices' : 'Sign in to access your business dashboard'}
+          </p>
+        </div>
 
         {error && (
-          <div className="mb-4 rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
-            {error}
+          <div className="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">
+            <p className="font-medium">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            required
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-400 focus:border-slate-500 focus:outline-none"
-          />
-          <input
-            type="password"
-            placeholder="Password (min 8 chars)"
-            required
-            minLength={8}
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-400 focus:border-slate-500 focus:outline-none"
-          />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Email Address</label>
+            <input
+              type="email"
+              placeholder="you@company.com"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full rounded-md border border-gray-300 bg-white px-3.5 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-gray-400"
+            />
+          </div>
+          
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
+            <input
+              type="password"
+              placeholder="Min 8 characters"
+              required
+              minLength={8}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full rounded-md border border-gray-300 bg-white px-3.5 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-gray-400"
+            />
+          </div>
 
           {isSignup && (
-            <input
-              type="text"
-              placeholder="Business Name"
-              required
-              value={form.business_name}
-              onChange={(e) => setForm({ ...form, business_name: e.target.value })}
-              className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-400 focus:border-slate-500 focus:outline-none"
-            />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Business Name</label>
+              <input
+                type="text"
+                placeholder="Acme Corporation"
+                required
+                value={form.business_name}
+                onChange={(e) => setForm({ ...form, business_name: e.target.value })}
+                className="w-full rounded-md border border-gray-300 bg-white px-3.5 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-gray-400"
+              />
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-slate-100 py-2 text-sm font-medium text-slate-900 hover:bg-white disabled:opacity-50"
-          >
-            {loading ? 'Please wait...' : isSignup ? 'Sign Up' : 'Sign In'}
-          </button>
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none disabled:opacity-50"
+            >
+              {loading ? 'Please wait...' : isSignup ? 'Sign Up' : 'Sign In'}
+            </button>
+          </div>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-400">
+        <p className="mt-8 text-center text-sm text-gray-500">
           {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
           <button
             onClick={() => { setIsSignup(!isSignup); setError('') }}
-            className="text-slate-200 underline hover:text-white"
+            className="font-semibold text-indigo-600 hover:text-indigo-500"
           >
-            {isSignup ? 'Sign In' : 'Sign Up'}
+            {isSignup ? 'Sign in instead' : 'Sign up for free'}
           </button>
         </p>
       </div>
