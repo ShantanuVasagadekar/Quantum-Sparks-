@@ -113,8 +113,12 @@ function DashboardPage({ refreshToken }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+      </div>
+
       {error && (
-        <div className="rounded-md border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 shadow-sm text-sm text-red-700">
           {error}
         </div>
       )}
@@ -126,52 +130,50 @@ function DashboardPage({ refreshToken }) {
         <StatCard label="Overdue Amount" value={formatCurrency(overdueAmount)} />
       </section>
 
-      <section className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-        <p className="text-sm text-slate-300">
-          Priority focus: invoices with due dates approaching and high pending balances should be followed up first.
-        </p>
-      </section>
-
-      <section className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-white">Outstanding Invoices</h2>
-          <p className="mt-1 text-sm text-slate-400">Immediate action view for unpaid invoices.</p>
+      <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-5">
+          <h3 className="text-base font-semibold text-gray-900">Priority Action Required</h3>
+          <p className="mt-1 text-sm text-gray-500">Invoices with approaching due dates or high pending balances.</p>
         </div>
-
+        
         {outstandingInvoices.length === 0 ? (
-          <div className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-6 text-center">
-            <p className="text-sm text-slate-300">No outstanding invoices at this time.</p>
+          <div className="px-6 py-10 text-center">
+            <p className="text-sm font-medium text-gray-400">All caught up. No outstanding invoices at this time.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-gray-100">
             {outstandingInvoices.map((invoice) => (
-              <div key={invoice.id} className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-1">
-                    <p className="text-base font-semibold text-white">{invoice.client_name}</p>
-                    <p className="text-2xl font-semibold text-white">{formatCurrency(invoice.outstanding_amount)}</p>
-                    <p className="text-sm text-slate-400">Due {formatDate(invoice.due_date)}</p>
-                    <StatusBadge status={invoice.status} />
+              <div key={invoice.id} className="p-6 transition-colors hover:bg-gray-50/50">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-lg font-bold text-gray-900">{formatCurrency(invoice.outstanding_amount)}</p>
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="font-medium text-gray-700">{invoice.client_name}</span>
+                      <span className="text-gray-400">&bull;</span>
+                      <span className="text-gray-500">Due {formatDate(invoice.due_date)}</span>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={invoice.status} />
+                    <div className="h-4 w-px bg-gray-200 mx-2 hidden lg:block"></div>
+                    <button
+                      onClick={() => openDetail(invoice.id)}
+                      className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    >
+                      View
+                    </button>
                     <button
                       onClick={() => setSelectedInvoice(invoice)}
-                      className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700"
+                      className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                     >
-                      Add Payment
+                      Record Payment
                     </button>
                     <button
                       onClick={() => sendReminder(invoice.id)}
-                      className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700"
+                      className="rounded-md bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
                     >
-                      {copiedInvoiceId === invoice.id ? 'Copied' : 'Send Reminder'}
-                    </button>
-                    <button
-                      onClick={() => openDetail(invoice.id)}
-                      className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-white"
-                    >
-                      View Invoice
+                      {copiedInvoiceId === invoice.id ? 'Copied Link' : 'Send Reminder'}
                     </button>
                   </div>
                 </div>
@@ -181,33 +183,33 @@ function DashboardPage({ refreshToken }) {
         )}
       </section>
 
-      <section className="rounded-xl border border-slate-700 bg-slate-900 p-5">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-white">Invoice List</h2>
-          <p className="mt-1 text-sm text-slate-400">Secondary tabular view of recent invoices.</p>
+      <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-5">
+          <h3 className="text-base font-semibold text-gray-900">Recent Invoices</h3>
+          <p className="mt-1 text-sm text-gray-500">Historical view of the latest generated invoices.</p>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead>
-              <tr className="border-b border-slate-700 text-left text-slate-400">
-                <th className="pb-2 pr-4">Invoice</th>
-                <th className="pb-2 pr-4">Client</th>
-                <th className="pb-2 pr-4">Due Date</th>
-                <th className="pb-2 pr-4 text-right">Total</th>
-                <th className="pb-2 pr-4 text-right">Amount Pending</th>
-                <th className="pb-2">Status</th>
+              <tr className="bg-white text-left text-gray-500">
+                <th className="py-3 pl-6 pr-4 font-semibold">Invoice</th>
+                <th className="py-3 px-4 font-semibold">Client</th>
+                <th className="py-3 px-4 font-semibold">Due Date</th>
+                <th className="py-3 px-4 text-right font-semibold">Total Amount</th>
+                <th className="py-3 px-4 text-right font-semibold">Pending</th>
+                <th className="py-3 px-6 font-semibold">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100 bg-white">
               {invoices.slice(0, 12).map((invoice) => (
-                <tr key={invoice.id} className="border-b border-slate-800 hover:bg-slate-800/70">
-                  <td className="py-3 pr-4 text-slate-100">{invoice.invoice_number}</td>
-                  <td className="py-3 pr-4 text-slate-300">{invoice.client_name}</td>
-                  <td className="py-3 pr-4 text-slate-300">{formatDate(invoice.due_date)}</td>
-                  <td className="py-3 pr-4 text-right text-slate-100">{formatCurrency(invoice.total_amount)}</td>
-                  <td className="py-3 pr-4 text-right font-medium text-slate-100">{formatCurrency(invoice.outstanding_amount)}</td>
-                  <td className="py-3"><StatusBadge status={invoice.status} /></td>
+                <tr key={invoice.id} className="transition-colors hover:bg-gray-50/50">
+                  <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{invoice.invoice_number}</td>
+                  <td className="py-4 px-4 text-gray-600">{invoice.client_name}</td>
+                  <td className="py-4 px-4 text-gray-500">{formatDate(invoice.due_date)}</td>
+                  <td className="py-4 px-4 text-right text-gray-900">{formatCurrency(invoice.total_amount)}</td>
+                  <td className="py-4 px-4 text-right font-medium text-gray-900">{formatCurrency(invoice.outstanding_amount)}</td>
+                  <td className="py-4 px-6"><StatusBadge status={invoice.status} /></td>
                 </tr>
               ))}
             </tbody>
@@ -250,9 +252,9 @@ function DashboardPage({ refreshToken }) {
 
 function StatCard({ label, value }) {
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <p className="text-sm font-medium text-gray-500">{label}</p>
+      <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900">{value}</p>
     </div>
   )
 }
