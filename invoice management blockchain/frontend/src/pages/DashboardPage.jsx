@@ -4,32 +4,38 @@ import InvoiceDetailModal from '../components/InvoiceDetailModal'
 import PaymentModal from '../components/PaymentModal'
 import StatusBadge from '../components/StatusBadge'
 import { formatCurrency, formatDate } from '../utils/format'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts'
+import { motion } from 'framer-motion'
 
 function DashboardPage({ refreshToken }) {
   const [summary, setSummary] = useState(null)
   const [invoices, setInvoices] = useState([])
+  const [collectionsTrend, setCollectionsTrend] = useState([])
+  const [invoiceCountTrend, setInvoiceCountTrend] = useState([])
   const [detailInvoice, setDetailInvoice] = useState(null)
   const [detailTimeline, setDetailTimeline] = useState([])
   const [detailPayments, setDetailPayments] = useState([])
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [anchoring, setAnchoring] = useState(false)
   const [copiedInvoiceId, setCopiedInvoiceId] = useState('')
-  const [seeding, setSeeding] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let mounted = true
 
     async function fetchData() {
-      const [summaryRes, invoicesRes] = await Promise.all([
+      const [summaryRes, invoicesRes, trendRes, invoiceTrendRes] = await Promise.all([
         api.get('/dashboard/summary'),
-        api.get('/invoices')
+        api.get('/invoices'),
+        api.get('/dashboard/collections-trend'),
+        api.get('/dashboard/invoice-count-trend')
       ])
 
       if (!mounted) return
       setSummary(summaryRes.data)
       setInvoices(invoicesRes.data)
+      setCollectionsTrend(trendRes.data)
+      setInvoiceCountTrend(invoiceTrendRes.data)
       setError('')
     }
 
@@ -37,6 +43,8 @@ function DashboardPage({ refreshToken }) {
       if (mounted) {
         setSummary({ total_invoiced: 0, total_collected: 0, total_outstanding: 0, total_overdue: 0 })
         setInvoices([])
+        setCollectionsTrend([])
+        setInvoiceCountTrend([])
         setError(err.response?.data?.error || 'Unable to load dashboard data.')
       }
     })
@@ -76,12 +84,14 @@ function DashboardPage({ refreshToken }) {
     try {
       setAnchoring(true)
       await api.post(`/invoices/${invoiceId}/anchor`)
-      const [summaryRes, invoicesRes] = await Promise.all([
+      const [summaryRes, invoicesRes, trendRes] = await Promise.all([
         api.get('/dashboard/summary'),
-        api.get('/invoices')
+        api.get('/invoices'),
+        api.get('/dashboard/collections-trend')
       ])
       setSummary(summaryRes.data)
       setInvoices(invoicesRes.data)
+      setCollectionsTrend(trendRes.data)
 
       if (detailInvoice?.id === invoiceId) {
         await openDetail(invoiceId)
@@ -90,25 +100,6 @@ function DashboardPage({ refreshToken }) {
       setError(err.response?.data?.error || 'Unable to verify invoice.')
     } finally {
       setAnchoring(false)
-    }
-  }
-
-  async function seedDemoData() {
-    try {
-      setSeeding(true)
-      setError('')
-      await api.post('/admin/seed-demo', { clients: 50, invoices: 300, maxPayments: 4 })
-      const [summaryRes, invoicesRes] = await Promise.all([
-        api.get('/dashboard/summary'),
-        api.get('/invoices')
-      ])
-      setSummary(summaryRes.data)
-      setInvoices(invoicesRes.data)
-      alert('Demo data generated successfully.')
-    } catch (err) {
-      setError(err.response?.data?.error || 'Unable to generate demo data.')
-    } finally {
-      setSeeding(false)
     }
   }
 
@@ -137,23 +128,12 @@ function DashboardPage({ refreshToken }) {
     { name: 'Pending (Not Overdue)', value: Math.max(0, amountPending - overdueAmount), color: '#F59E0B' },
     { name: 'Overdue', value: overdueAmount, color: '#EF4444' }
   ].filter(d => d.value > 0)
-
-  // Fallback if all 0
-  if (chartData.length === 0) {
-    chartData.push({ name: 'No Data', value: 1, color: '#E5E7EB' })
-  }
+  const donutTotal = amountReceived + amountPending
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-        <button
-          onClick={seedDemoData}
-          disabled={seeding}
-          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {seeding ? 'Generating...' : 'Generate Demo Data'}
-        </button>
       </div>
 
       {error && (
@@ -166,34 +146,42 @@ function DashboardPage({ refreshToken }) {
         <StatCard label="Total Invoiced" value={formatCurrency(totalInvoiced)} />
         <StatCard label="Amount Received" value={formatCurrency(amountReceived)} />
         <StatCard label="Amount Pending" value={formatCurrency(amountPending)} />
-        <StatCard label="Overdue Amount" value={formatCurrency(overdueAmount)} />
+        <StatCard label="Overdue Invoices" value={String(summary.overdue_count || 0)} />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recharts Pie Chart Section */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden p-6 col-span-1 flex flex-col">
           <h3 className="text-base font-semibold text-gray-900 mb-4">Collection Overview</h3>
-          <div className="flex-1 w-full h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {chartData.length === 0 ? (
+            <div className="flex h-[250px] items-center justify-center text-sm text-gray-500">No collection data available</div>
+          ) : (
+            <div className="flex-1 w-full h-[250px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-500 text-xs">Total</text>
+                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-900 text-sm font-semibold">
+                    ₹{donutTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </text>
+                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                  <Legend verticalAlign="bottom" height={36}/>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Priority Action Required */}
@@ -251,6 +239,46 @@ function DashboardPage({ refreshToken }) {
         </div>
       </section>
 
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-base font-semibold text-gray-900">Monthly Revenue & Collections</h3>
+        {collectionsTrend.length === 0 ? (
+          <p className="text-sm text-gray-500">No payment trend data available yet.</p>
+        ) : (
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={collectionsTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend />
+                <Line type="monotone" dataKey="collected" name="Collections" stroke="#4F46E5" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-base font-semibold text-gray-900">Invoice Count Per Month</h3>
+        {invoiceCountTrend.length === 0 ? (
+          <p className="text-sm text-gray-500">No invoice trend data available yet.</p>
+        ) : (
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={invoiceCountTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="invoices" name="Invoices" fill="#0EA5E9" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
 
       <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-5">
@@ -291,12 +319,16 @@ function DashboardPage({ refreshToken }) {
           invoice={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
           onSaved={async () => {
-            const [summaryRes, invoicesRes] = await Promise.all([
+            const [summaryRes, invoicesRes, trendRes, invoiceTrendRes] = await Promise.all([
               api.get('/dashboard/summary'),
-              api.get('/invoices')
+              api.get('/invoices'),
+              api.get('/dashboard/collections-trend'),
+              api.get('/dashboard/invoice-count-trend')
             ])
             setSummary(summaryRes.data)
             setInvoices(invoicesRes.data)
+            setCollectionsTrend(trendRes.data)
+            setInvoiceCountTrend(invoiceTrendRes.data)
           }}
         />
       )}
@@ -321,10 +353,10 @@ function DashboardPage({ refreshToken }) {
 
 function StatCard({ label, value }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.2 }} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
       <p className="text-sm font-medium text-gray-500">{label}</p>
       <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900">{value}</p>
-    </div>
+    </motion.div>
   )
 }
 

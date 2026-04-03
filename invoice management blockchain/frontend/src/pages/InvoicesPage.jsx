@@ -7,9 +7,11 @@ import StatusBadge from '../components/StatusBadge'
 import AlgorandBadge from '../components/AlgorandBadge'
 import TxnLink from '../components/TxnLink'
 import { formatCurrency, formatDate } from '../utils/format'
+import { useToast } from '../ui/ToastContext'
 
 function InvoicesPage({ refreshToken }) {
   const location = useLocation()
+  const { showToast } = useToast()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
@@ -19,6 +21,11 @@ function InvoicesPage({ refreshToken }) {
   const [anchoring, setAnchoring] = useState(false)
   const [copiedInvoiceId, setCopiedInvoiceId] = useState('')
   const [error, setError] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('due_date')
+  const [sortDir, setSortDir] = useState('asc')
+  const [page, setPage] = useState(1)
+  const pageSize = 12
 
   useEffect(() => {
     fetchInvoices().catch(() => {})
@@ -43,14 +50,14 @@ function InvoicesPage({ refreshToken }) {
     try {
       const res = await api.post(`/invoices/${invoiceId}/reminder`)
       if (res.data.email_sent) {
-        alert('Email reminder sent successfully!')
+        showToast('Email reminder sent successfully!', 'success')
         setCopiedInvoiceId(invoiceId)
         setTimeout(() => setCopiedInvoiceId(''), 1500)
       } else {
         await navigator.clipboard.writeText(res.data.message)
         setCopiedInvoiceId(invoiceId)
         setTimeout(() => setCopiedInvoiceId(''), 1500)
-        alert('Client has no email. Reminder text copied to clipboard.')
+        showToast('Client has no email. Reminder text copied to clipboard.', 'success')
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to send reminder message.')
@@ -88,7 +95,39 @@ function InvoicesPage({ refreshToken }) {
     }
   }
 
-  const rows = useMemo(() => invoices, [invoices])
+  const filteredRows = useMemo(() => {
+    if (statusFilter === 'all') return invoices
+    return invoices.filter((i) => i.status === statusFilter)
+  }, [invoices, statusFilter])
+
+  const sortedRows = useMemo(() => {
+    const arr = [...filteredRows]
+    arr.sort((a, b) => {
+      let av = a[sortBy]
+      let bv = b[sortBy]
+      if (sortBy.includes('amount')) {
+        av = Number(av || 0)
+        bv = Number(bv || 0)
+      } else {
+        av = av ? String(av) : ''
+        bv = bv ? String(bv) : ''
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+    return arr
+  }, [filteredRows, sortBy, sortDir])
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  const rows = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return sortedRows.slice(start, start + pageSize)
+  }, [sortedRows, page])
+
+  useEffect(() => {
+    setPage(1)
+  }, [statusFilter, sortBy, sortDir, location.search])
 
   if (loading) {
     return (
@@ -108,6 +147,24 @@ function InvoicesPage({ refreshToken }) {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Invoices</h2>
           <p className="mt-1 text-sm text-gray-500">Manage collections and invoice-level actions.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+            <option value="all">All statuses</option>
+            <option value="paid">Paid</option>
+            <option value="partial">Partial</option>
+            <option value="overdue">Overdue</option>
+            <option value="sent">Sent</option>
+            <option value="draft">Draft</option>
+          </select>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+            <option value="due_date">Sort: Due date</option>
+            <option value="total_amount">Sort: Total amount</option>
+            <option value="status">Sort: Status</option>
+          </select>
+          <button onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+            {sortDir === 'asc' ? 'Asc' : 'Desc'}
+          </button>
         </div>
       </div>
 
@@ -197,6 +254,25 @@ function InvoicesPage({ refreshToken }) {
           </div>
         )}
       </section>
+      {sortedRows.length > pageSize && (
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {selectedInvoice && (
         <PaymentModal

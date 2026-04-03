@@ -12,6 +12,10 @@ function ClientsPage({ refreshToken }) {
   const [form, setForm] = useState({ name: '', company_name: '', email: '', phone: '', state: '' })
   const [formLoading, setFormLoading] = useState(false)
   const [formError, setFormError] = useState('')
+  const [sortBy, setSortBy] = useState('name')
+  const [sortDir, setSortDir] = useState('asc')
+  const [page, setPage] = useState(1)
+  const pageSize = 12
 
   useEffect(() => {
     let mounted = true
@@ -61,6 +65,16 @@ function ClientsPage({ refreshToken }) {
     "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Lakshadweep", "Puducherry"
   ];
 
+  const sortedClients = [...clients].sort((a, b) => {
+    const av = String(a[sortBy] || '')
+    const bv = String(b[sortBy] || '')
+    if (av < bv) return sortDir === 'asc' ? -1 : 1
+    if (av > bv) return sortDir === 'asc' ? 1 : -1
+    return 0
+  })
+  const totalPages = Math.max(1, Math.ceil(sortedClients.length / pageSize))
+  const currentRows = sortedClients.slice((page - 1) * pageSize, page * pageSize)
+
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
@@ -68,12 +82,22 @@ function ClientsPage({ refreshToken }) {
           <h2 className="text-xl font-semibold text-gray-900">My Clients</h2>
           <p className="text-sm text-gray-400">Keep your customer contact details in one place.</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-        >
-          {showForm ? 'Cancel' : '+ Add Client'}
-        </button>
+        <div className="flex items-center gap-2">
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+            <option value="name">Sort: Name</option>
+            <option value="state">Sort: State</option>
+            <option value="email">Sort: Email</option>
+          </select>
+          <button onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+            {sortDir === 'asc' ? 'Asc' : 'Desc'}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          >
+            {showForm ? 'Cancel' : '+ Add Client'}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -139,7 +163,7 @@ function ClientsPage({ refreshToken }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                {clients.map((client) => (
+                {currentRows.map((client) => (
                   <tr key={client.id} className="transition-colors hover:bg-gray-50/50">
                     <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{client.name}</td>
                     <td className="py-4 px-4 text-gray-600">{client.company_name || '-'}</td>
@@ -154,6 +178,13 @@ function ClientsPage({ refreshToken }) {
         )}
 
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {sortedClients.length > pageSize && (
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
+            <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+          </div>
+        )}
       </div>
     </section>
   )

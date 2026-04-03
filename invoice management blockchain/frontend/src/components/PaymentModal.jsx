@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import api from '../api/client'
 import { formatCurrency } from '../utils/format'
+import { motion } from 'framer-motion'
 
 const defaultForm = {
   amount: '',
@@ -35,7 +36,13 @@ function PaymentModal({ invoice, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
-      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+      <motion.form
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2 }}
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+      >
         <h3 className="text-xl font-bold text-gray-900">Record Payment</h3>
         <p className="mt-1 text-sm text-gray-500">
           Invoice <span className="font-semibold text-gray-700">{invoice.invoice_number}</span> &mdash; Pending <span className="font-semibold text-red-600">{formatCurrency(invoice.outstanding_amount)}</span>
@@ -112,7 +119,7 @@ function PaymentModal({ invoice, onClose, onSaved }) {
             {loading ? 'Processing...' : 'Confirm Payment Receipt'}
           </button>
         </div>
-      </form>
+      </motion.form>
     </div>
   )
 }

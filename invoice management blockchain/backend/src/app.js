@@ -12,7 +12,6 @@ const dashboardRoutes = require('./routes/dashboard.routes')
 const blockchainRoutes = require('./routes/blockchain.routes')
 const eventRoutes = require('./routes/event.routes')
 const userRoutes = require('./routes/user.routes')
-const adminRoutes = require('./routes/admin.routes')
 
 const app = express()
 
@@ -44,7 +43,6 @@ app.use('/api', paymentRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/blockchain', blockchainRoutes)
 app.use('/api/users', userRoutes)
-app.use('/api/admin', adminRoutes)
 
 app.use(notFound)
 app.use(errorHandler)

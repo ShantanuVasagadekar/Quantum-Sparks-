@@ -2,9 +2,9 @@ const { faker } = require('@faker-js/faker')
 const pool = require('../src/config/db')
 
 const USER_ID = process.env.FAKER_USER_ID || process.env.DEMO_USER_ID || '11111111-1111-1111-1111-111111111111'
-const CLIENT_COUNT = Number(process.env.FAKER_CLIENTS || 50)
-const INVOICE_COUNT = Number(process.env.FAKER_INVOICES || 300)
-const MAX_PAYMENTS_PER_INVOICE = Number(process.env.FAKER_MAX_PAYMENTS || 3)
+const CLIENT_COUNT = Number(process.env.FAKER_CLIENTS || 150)
+const INVOICE_COUNT = Number(process.env.FAKER_INVOICES || 2000)
+const MAX_PAYMENTS_PER_INVOICE = Number(process.env.FAKER_MAX_PAYMENTS || 5)
 
 async function hasColumn(client, tableName, columnName) {
   const res = await client.query(
@@ -93,7 +93,7 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
 
   const invoice = invoiceInsert.rows[0]
   for (const item of lineItems) {
-    if (capabilities.lineItemsHasGstAmount) {
+    if (capabilities.lineItemsHasGstPercent && capabilities.lineItemsHasGstAmount) {
       await client.query(
         `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, gst_percent, gst_amount, line_total, sort_order)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -108,7 +108,7 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
           item.sortOrder,
         ]
       )
-    } else {
+    } else if (capabilities.lineItemsHasGstPercent) {
       await client.query(
         `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, gst_percent, line_total, sort_order)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -122,10 +122,23 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
           item.sortOrder,
         ]
       )
+    } else {
+      await client.query(
+        `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, line_total, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          invoice.id,
+          item.description,
+          item.quantity,
+          item.unitPrice,
+          item.lineTotal.toFixed(2),
+          item.sortOrder,
+        ]
+      )
     }
   }
 
-  const paymentCount = faker.number.int({ min: 0, max: MAX_PAYMENTS_PER_INVOICE })
+  const paymentCount = faker.number.int({ min: 1, max: MAX_PAYMENTS_PER_INVOICE })
   let paidAmount = 0
   for (let p = 0; p < paymentCount; p += 1) {
     const remaining = Number(invoice.total_amount) - paidAmount
@@ -163,8 +176,25 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
     }
   }
 
-  const outstanding = Number((Number(invoice.total_amount) - paidAmount).toFixed(2))
-  const status = outstanding <= 0 ? 'paid' : paidAmount > 0 ? 'partial' : (dueDate < new Date() ? 'overdue' : 'sent')
+  const totalAmount = Number(invoice.total_amount)
+  const randomStatus = faker.helpers.weightedArrayElement([
+    { value: 'paid', weight: 35 },
+    { value: 'partial', weight: 30 },
+    { value: 'overdue', weight: 20 },
+    { value: 'sent', weight: 15 }, // pending equivalent in this schema
+  ])
+  let status = randomStatus
+  if (status === 'paid') {
+    paidAmount = totalAmount
+  } else if (status === 'partial') {
+    paidAmount = Number(faker.number.float({ min: totalAmount * 0.2, max: totalAmount * 0.85, multipleOf: 0.01 }).toFixed(2))
+  } else if (status === 'overdue') {
+    paidAmount = Number(faker.number.float({ min: 0, max: totalAmount * 0.5, multipleOf: 0.01 }).toFixed(2))
+  } else {
+    paidAmount = 0
+  }
+  if (paidAmount >= totalAmount) status = 'paid'
+  const outstanding = Number((totalAmount - paidAmount).toFixed(2))
 
   await client.query(
     `UPDATE invoices
@@ -177,18 +207,23 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
   )
 }
 
-async function run() {
+async function runSeed(options = {}) {
+  const closePoolOnExit = options.closePoolOnExit !== false
   const client = await pool.connect()
   try {
     console.log('Starting faker seed...')
     await client.query('BEGIN')
     const capabilities = {
+      lineItemsHasGstPercent: await hasColumn(client, 'invoice_line_items', 'gst_percent'),
       lineItemsHasGstAmount: await hasColumn(client, 'invoice_line_items', 'gst_amount'),
       paymentsHasSourceAndStatus:
         (await hasColumn(client, 'payments', 'source')) &&
         (await hasColumn(client, 'payments', 'status')),
     }
     console.log('Schema capabilities:', capabilities)
+    if (!capabilities.lineItemsHasGstPercent) {
+      console.warn('Warning: invoice_line_items.gst_percent missing. Seeding without GST columns.')
+    }
 
     const clients = []
     for (let i = 0; i < CLIENT_COUNT; i += 1) {
@@ -213,8 +248,16 @@ async function run() {
     process.exitCode = 1
   } finally {
     client.release()
-    await pool.end()
+    if (closePoolOnExit) {
+      await pool.end()
+    }
   }
 }
 
-run()
+if (require.main === module) {
+  runSeed({ closePoolOnExit: true })
+}
+
+module.exports = {
+  runSeed,
+}

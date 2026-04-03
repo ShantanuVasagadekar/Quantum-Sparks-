@@ -27,6 +27,15 @@ async function trend(req, res, next) {
   }
 }
 
+async function invoiceCountTrend(req, res, next) {
+  try {
+    const data = await dashboardService.getInvoiceCountTrend(req.user.id)
+    res.json(data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 async function clientAnalytics(req, res, next) {
   try {
     const data = await dashboardService.getClientAnalytics(req.user.id)
@@ -58,6 +67,7 @@ module.exports = {
   summary,
   overdue,
   trend,
+  invoiceCountTrend,
   clientAnalytics,
   clientLeaderboard,
   cashflowPrediction

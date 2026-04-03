@@ -4,6 +4,7 @@ const { calculateRiskScore, riskLevelFromScore } = require('../utils/risk.util')
 async function getSummary(userId) {
   const { rows } = await pool.query(
     `SELECT
+       COUNT(*)::int AS total_invoices,
        COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_invoiced,
        COALESCE(SUM(paid_amount), 0)::numeric(14,2) AS total_collected,
        COALESCE(SUM(outstanding_amount), 0)::numeric(14,2) AS total_outstanding,
@@ -40,6 +41,20 @@ async function getCollectionsTrend(userId) {
      WHERE user_id = $1
      GROUP BY date_trunc('month', payment_date)
      ORDER BY date_trunc('month', payment_date) ASC`,
+    [userId]
+  )
+  return rows
+}
+
+async function getInvoiceCountTrend(userId) {
+  const { rows } = await pool.query(
+    `SELECT to_char(date_trunc('month', issue_date::timestamp), 'YYYY-MM') AS month,
+            COUNT(*)::int AS invoices
+     FROM invoices
+     WHERE user_id = $1
+       AND is_cancelled = false
+     GROUP BY date_trunc('month', issue_date::timestamp)
+     ORDER BY date_trunc('month', issue_date::timestamp) ASC`,
     [userId]
   )
   return rows
@@ -250,6 +265,7 @@ module.exports = {
   getSummary,
   getOverdueInvoices,
   getCollectionsTrend,
+  getInvoiceCountTrend,
   getClientAnalytics,
   getClientLeaderboard,
   getCashflowPrediction

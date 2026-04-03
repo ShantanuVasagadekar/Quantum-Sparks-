@@ -1,10 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
 
-const initialLineItem = { description: '', quantity: 1, unit_price: 0, gst_percent: 0 }
+function createLineItem(gst = 0) {
+  return {
+    _id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    description: '',
+    quantity: 1,
+    unit_price: 0,
+    gst_percent: gst,
+  }
+}
 
 function InvoiceForm({ onSuccess }) {
   const [clients, setClients] = useState([])
+  const [clientMode, setClientMode] = useState('existing')
+  const [clientSearch, setClientSearch] = useState('')
+  const [searchingClients, setSearchingClients] = useState(false)
+  const [newClient, setNewClient] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    gst_number: '',
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
@@ -23,11 +41,29 @@ function InvoiceForm({ onSuccess }) {
     default_gst_percent: 18,
     terms: '',
     notes: '',
-    line_items: [initialLineItem]
+    line_items: [createLineItem(18)]
   })
 
   useEffect(() => {
-    api.get('/clients').then((res) => setClients(res.data)).catch(() => setClients([]))
+    let cancelled = false
+    setSearchingClients(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get('/clients', { params: { search: clientSearch } })
+        if (!cancelled) setClients(res.data)
+      } catch {
+        if (!cancelled) setClients([])
+      } finally {
+        if (!cancelled) setSearchingClients(false)
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [clientSearch])
+
+  useEffect(() => {
     api.get('/auth/me').then((res) => {
       setForm((prev) => ({
         ...prev,
@@ -39,6 +75,8 @@ function InvoiceForm({ onSuccess }) {
       }))
     }).catch(() => {})
   }, [])
+
+  const selectedClient = useMemo(() => clients.find((c) => c.id === form.client_id), [clients, form.client_id])
 
   const subtotal = form.line_items.reduce(
     (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
@@ -60,8 +98,25 @@ function InvoiceForm({ onSuccess }) {
     setError('')
 
     try {
+      let finalClientId = form.client_id
+      if (clientMode === 'new') {
+        const createdClient = await api.post('/clients', {
+          name: newClient.name,
+          email: newClient.email || null,
+          phone: newClient.phone || null,
+          address: newClient.address || null,
+          gst_number: newClient.gst_number || null,
+          company_name: newClient.name,
+        })
+        finalClientId = createdClient.data.id
+      }
+      if (clientMode === 'existing' && !finalClientId) {
+        throw new Error('Please select an existing client.')
+      }
+
       const payload = {
         ...form,
+        client_id: finalClientId,
         discount_amount: Number(form.discount_amount || 0),
         line_items: form.line_items.map((item) => ({
           description: item.description,
@@ -94,18 +149,66 @@ function InvoiceForm({ onSuccess }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <FormSection title="Client Details">
+        <div className="mb-4 inline-flex rounded-md border border-gray-300 p-1 text-sm">
+          <button type="button" onClick={() => setClientMode('existing')} className={`rounded px-3 py-1.5 ${clientMode === 'existing' ? 'bg-indigo-600 text-white' : 'text-gray-700'}`}>
+            Select Existing Client
+          </button>
+          <button type="button" onClick={() => setClientMode('new')} className={`rounded px-3 py-1.5 ${clientMode === 'new' ? 'bg-indigo-600 text-white' : 'text-gray-700'}`}>
+            Add New Client
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Client" required>
-            <select
-              required
-              value={form.client_id || ''}
-              onChange={(e) => setForm((prev) => ({ ...prev, client_id: e.target.value }))}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="" disabled>Select an existing client</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name} {c.state ? `(${c.state})` : '(No State)'}</option>)}
-            </select>
-          </Field>
+          {clientMode === 'existing' ? (
+            <Field label="Client" required>
+              <input
+                value={clientSearch}
+                onChange={(e) => {
+                  setClientSearch(e.target.value)
+                  setForm((prev) => ({ ...prev, client_id: '' }))
+                }}
+                placeholder="Search client by name/email"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+              <div className="mt-2 max-h-44 overflow-auto rounded-md border border-gray-200">
+                {searchingClients ? <p className="p-2 text-xs text-gray-500">Searching...</p> : null}
+                {!searchingClients && clients.length === 0 ? <p className="p-2 text-xs text-gray-500">No clients found.</p> : null}
+                {clients.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, client_id: c.id }))
+                      setClientSearch(`${c.name}${c.email ? ` (${c.email})` : ''}`)
+                    }}
+                    className={`w-full border-b border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50 ${form.client_id === c.id ? 'bg-indigo-50' : ''}`}
+                  >
+                    <span className="font-medium text-gray-900">{c.name}</span>
+                    <span className="ml-2 text-xs text-gray-500">{c.email || 'No email'}</span>
+                  </button>
+                ))}
+              </div>
+              {selectedClient ? <p className="mt-1 text-xs text-emerald-700">Selected: {selectedClient.name}</p> : null}
+            </Field>
+          ) : (
+            <>
+              <Field label="Client Name" required>
+                <input required value={newClient.name} onChange={(e) => setNewClient((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </Field>
+              <Field label="Client Email">
+                <input type="email" value={newClient.email} onChange={(e) => setNewClient((p) => ({ ...p, email: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </Field>
+              <Field label="Client Phone">
+                <input value={newClient.phone} onChange={(e) => setNewClient((p) => ({ ...p, phone: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </Field>
+              <Field label="Client GST Number">
+                <input value={newClient.gst_number} onChange={(e) => setNewClient((p) => ({ ...p, gst_number: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </Field>
+              <Field label="Client Address" className="md:col-span-2">
+                <input value={newClient.address} onChange={(e) => setNewClient((p) => ({ ...p, address: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </Field>
+            </>
+          )}
 
           <Field label="Invoice Number" required>
             <input
@@ -130,7 +233,7 @@ function InvoiceForm({ onSuccess }) {
       <FormSection title="Line Items">
         <div className="space-y-3">
           {form.line_items.map((item, index) => (
-            <div key={`${index}-${item.description}`} className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 bg-gray-50/50 p-4 md:grid-cols-4">
+            <div key={item._id} className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 bg-gray-50/50 p-4 md:grid-cols-4">
               <Field label="Description" required className="md:col-span-2">
                 <input
                   required
@@ -180,7 +283,7 @@ function InvoiceForm({ onSuccess }) {
 
           <button
             type="button"
-            onClick={() => setForm((prev) => ({ ...prev, line_items: [...prev.line_items, { ...initialLineItem }] }))}
+            onClick={() => setForm((prev) => ({ ...prev, line_items: [...prev.line_items, createLineItem(Number(form.default_gst_percent || 0))] }))}
             className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 mt-2"
           >
             + Add Line Item

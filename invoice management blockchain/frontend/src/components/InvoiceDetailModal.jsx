@@ -7,10 +7,13 @@ import PaymentSourceBadge from './PaymentSourceBadge'
 import PaymentTimeline from './PaymentTimeline'
 import AlgorandBadge from './AlgorandBadge'
 import TxnLink from './TxnLink'
+import { useToast } from '../ui/ToastContext'
+import { motion } from 'framer-motion'
 
 function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, anchoring, onPaid }) {
   const [downloading, setDownloading] = useState(false)
   const [reverifyingId, setReverifyingId] = useState('')
+  const { showToast } = useToast()
   const txId = invoice.anchor_tx_id || invoice.algo_anchor_tx_id
   const hash = invoice.anchor_hash || invoice.invoice_hash
   const explorerUrl = invoice.anchor_explorer_url || (txId ? `https://testnet.algoexplorer.io/tx/${txId}` : null)
@@ -35,7 +38,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
     } catch {
-      alert('Unable to download invoice PDF.')
+      showToast('Unable to download invoice PDF.', 'error')
     } finally {
       setDownloading(false)
     }
@@ -48,7 +51,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
       await api.post(`/payments/${payment.id}/verify-chain`, { algo_tx_id: paymentTxnId })
       if (onPaid) await onPaid()
     } catch (err) {
-      alert(err.response?.data?.error || 'Unable to re-verify this transaction.')
+      showToast(err.response?.data?.error || 'Unable to re-verify this transaction.', 'error')
     } finally {
       setReverifyingId('')
     }
@@ -56,7 +59,12 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2 }}
+        className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl"
+      >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/95 px-6 py-4 backdrop-blur">
           <div>
             <h3 className="text-xl font-bold text-gray-900">Invoice Details</h3>
@@ -180,7 +188,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
             <PaymentTimeline payments={payments} />
           </Section>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }
