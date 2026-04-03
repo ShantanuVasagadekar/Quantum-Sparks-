@@ -3,6 +3,7 @@ const env = require('../config/env')
 const realtime = require('./realtime.service')
 const { resolveInvoiceStatus } = require('../utils/invoice.util')
 const { anchorInvoiceToAlgorand } = require('./algorand.service')
+const mailer = require('./mailer.service')
 
 async function listInvoices(userId, filters) {
   const values = [userId]
@@ -147,7 +148,7 @@ async function createInvoice(userId, payload) {
   let clientId = payload.client_id;
   
   if (!clientId && payload.client_name) {
-    const existing = await pool.query('SELECT id FROM clients WHERE user_id = $1 AND name ILIKE $2', [userId, payload.client_name]);
+    const existing = await pool.query('SELECT id, state FROM clients WHERE user_id = $1 AND name ILIKE $2', [userId, payload.client_name]);
     if (existing.rows[0]) {
       clientId = existing.rows[0].id;
     } else {
@@ -170,8 +171,43 @@ async function createInvoice(userId, payload) {
     throw err
   }
 
-  const subtotal = payload.line_items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0)
-  const tax = Number(payload.tax_amount || 0)
+  const userRes = await pool.query('SELECT state FROM users WHERE id = $1', [userId])
+  const userState = userRes.rows[0]?.state
+  if (!userState) {
+    const err = new Error('Business state is required for GST. Please update your profile.')
+    err.status = 400
+    throw err
+  }
+
+  const clientRes = await pool.query('SELECT state FROM clients WHERE id = $1', [clientId])
+  const clientState = clientRes.rows[0]?.state
+  if (!clientState) {
+    const err = new Error('Client state is required for GST calculation. Please update client details.')
+    err.status = 400
+    throw err
+  }
+
+  const isSameState = userState.trim().toLowerCase() === clientState.trim().toLowerCase()
+
+  let subtotal = 0;
+  let totalCgst = 0;
+  let totalSgst = 0;
+  let totalIgst = 0;
+
+  for (const item of payload.line_items) {
+    const lineSubtotal = Number(item.quantity) * Number(item.unit_price)
+    subtotal += lineSubtotal
+    const gstAmount = lineSubtotal * (Number(item.gst_percent || 0) / 100)
+    
+    if (isSameState) {
+      totalCgst += gstAmount / 2
+      totalSgst += gstAmount / 2
+    } else {
+      totalIgst += gstAmount
+    }
+  }
+
+  const tax = totalCgst + totalSgst + totalIgst
   const discount = Number(payload.discount_amount || 0)
   const total = Number(payload.total_amount || subtotal + tax - discount)
   const status = 'draft'
@@ -184,8 +220,8 @@ async function createInvoice(userId, payload) {
     await clientConn.query('BEGIN')
 
     const invoiceRes = await clientConn.query(
-      `INSERT INTO invoices (user_id, client_id, invoice_number, title, description, currency, subtotal_amount, tax_amount, discount_amount, total_amount, paid_amount, status, issue_date, due_date, metadata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,$14)
+      `INSERT INTO invoices (user_id, client_id, invoice_number, title, description, currency, subtotal_amount, tax_amount, cgst_amount, sgst_amount, igst_amount, discount_amount, total_amount, paid_amount, status, issue_date, due_date, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14,$15,$16,$17)
        RETURNING *`,
       [
         userId,
@@ -196,6 +232,9 @@ async function createInvoice(userId, payload) {
         payload.currency || 'INR',
         subtotal.toFixed(2),
         tax.toFixed(2),
+        totalCgst.toFixed(2),
+        totalSgst.toFixed(2),
+        totalIgst.toFixed(2),
         discount.toFixed(2),
         total.toFixed(2),
         status,
@@ -210,9 +249,9 @@ async function createInvoice(userId, payload) {
       const item = payload.line_items[i]
       const lineTotal = Number(item.quantity) * Number(item.unit_price)
       await clientConn.query(
-        `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, line_total, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [invoice.id, item.description, item.quantity, item.unit_price, lineTotal.toFixed(2), i]
+        `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, gst_percent, line_total, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [invoice.id, item.description, item.quantity, item.unit_price, item.gst_percent || 0, lineTotal.toFixed(2), i]
       )
     }
 
@@ -312,15 +351,55 @@ async function updateInvoice(userId, invoiceId, payload) {
 
     // 3. Update line items if provided in payload
     if (payload.line_items && Array.isArray(payload.line_items)) {
+      
+      const userRes = await clientConn.query('SELECT state FROM users WHERE id = $1', [userId])
+      const userState = userRes.rows[0]?.state
+      const clientRes = await clientConn.query('SELECT state FROM clients WHERE id = $1', [current.client_id])
+      const clientState = clientRes.rows[0]?.state
+      
+      if (!userState || !clientState) {
+         const err = new Error('Both Business and Client state are required for editing GST-enabled line items.')
+         err.status = 400
+         throw err
+      }
+      
+      const isSameState = userState.trim().toLowerCase() === clientState.trim().toLowerCase()
+      
+      let subtotal = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
+
       await clientConn.query(`DELETE FROM invoice_line_items WHERE invoice_id = $1`, [invoiceId]);
       for (let i = 0; i < payload.line_items.length; i++) {
         const item = payload.line_items[i];
+        const lineTotal = Number(item.quantity) * Number(item.unit_price)
+        subtotal += lineTotal
+        const gstAmount = lineTotal * (Number(item.gst_percent || 0) / 100)
+        
+        if (isSameState) {
+          totalCgst += gstAmount / 2
+          totalSgst += gstAmount / 2
+        } else {
+          totalIgst += gstAmount
+        }
+
         await clientConn.query(
-          `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, line_total, sort_order)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [invoiceId, item.description, item.quantity, item.unit_price, (item.quantity * item.unit_price), i]
+          `INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, gst_percent, line_total, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [invoiceId, item.description, item.quantity, item.unit_price, item.gst_percent || 0, lineTotal.toFixed(2), i]
         )
       }
+      
+      const tax = totalCgst + totalSgst + totalIgst
+      const totalAmountWithGst = subtotal + tax - Number(current.discount_amount || 0)
+
+      await clientConn.query(
+        `UPDATE invoices SET
+           subtotal_amount = $1, tax_amount = $2, cgst_amount = $3, sgst_amount = $4, igst_amount = $5, total_amount = $6, outstanding_amount = $6 - paid_amount
+         WHERE id = $7`,
+        [subtotal.toFixed(2), tax.toFixed(2), totalCgst.toFixed(2), totalSgst.toFixed(2), totalIgst.toFixed(2), totalAmountWithGst.toFixed(2), invoiceId]
+      )
     }
 
     await clientConn.query(
@@ -508,11 +587,26 @@ async function generateReminder(userId, invoiceId) {
     year: 'numeric'
   })
 
-  const message = `Hi ${invoice.client_name}, this is a reminder for invoice ${invoice.invoice_number}. Total amount is INR ${totalAmount}, outstanding is INR ${outstandingAmount}, due on ${dueDate}. Please share payment update. Thank you.`
+  const message = `Hi ${invoice.client_name},\n\nThis is a reminder for invoice ${invoice.invoice_number}.\n\nTotal amount: INR ${totalAmount}\nOutstanding amount: INR ${outstandingAmount}\nDue date: ${dueDate}\n\nPlease share payment update.\n\nThank you.`
+
+  let emailSent = false;
+  if (invoice.client_email) {
+    try {
+      emailSent = await mailer.sendEmail({
+        to: invoice.client_email,
+        subject: `Payment Reminder: Invoice ${invoice.invoice_number}`,
+        text: message
+      });
+    } catch (err) {
+      console.error('[invoice.service] Failed to send reminder email:', err);
+    }
+  }
 
   return {
     invoice_id: invoice.id,
     client_name: invoice.client_name,
+    client_email: invoice.client_email,
+    email_sent: emailSent,
     message
   }
 }
@@ -640,6 +734,21 @@ async function getInvoicePdfData(userId, invoiceId) {
     throw err
   }
 
+  const userRes = await pool.query(
+    `SELECT business_name AS company_name, owner_name, email, phone, address, city, state, pincode, gst_number
+     FROM users WHERE id = $1`, [userId]
+  )
+  const user = userRes.rows[0]
+
+  const business = {
+    company_name: user?.company_name,
+    address: user?.address,
+    city_state_zip: user?.city && user?.state && user?.pincode ? `${user.city}, ${user.state} ${user.pincode}` : undefined,
+    phone: user?.phone,
+    email: user?.email,
+    gst_number: user?.gst_number || undefined
+  }
+
   const invoice = rows[0]
   const lineItemsRes = await pool.query(
     `SELECT * FROM invoice_line_items WHERE invoice_id = $1 ORDER BY sort_order ASC, created_at ASC`,
@@ -667,7 +776,8 @@ async function getInvoicePdfData(userId, invoiceId) {
     invoice,
     client,
     lineItems: lineItemsRes.rows,
-    payments: paymentsRes.rows
+    payments: paymentsRes.rows,
+    business
   }
 }
 

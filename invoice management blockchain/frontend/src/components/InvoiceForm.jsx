@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react'
 import api from '../api/client'
 
-const initialLineItem = { description: '', quantity: 1, unit_price: 0 }
+const initialLineItem = { description: '', quantity: 1, unit_price: 0, gst_percent: 0 }
 
 function InvoiceForm({ onSuccess }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
-    client_name: '',
+    client_id: '',
     invoice_number: `INV-${Date.now().toString().slice(-6)}`,
     title: '',
     description: '',
     issue_date: new Date().toISOString().slice(0, 10),
     due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
-    tax_amount: 0,
     discount_amount: 0,
     line_items: [initialLineItem]
   })
@@ -27,7 +26,7 @@ function InvoiceForm({ onSuccess }) {
     (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
     0
   )
-  const total = subtotal + Number(form.tax_amount || 0) - Number(form.discount_amount || 0)
+  const total = subtotal - Number(form.discount_amount || 0)
 
   function updateLineItem(index, key, value) {
     setForm((prev) => {
@@ -45,13 +44,12 @@ function InvoiceForm({ onSuccess }) {
     try {
       const payload = {
         ...form,
-        tax_amount: Number(form.tax_amount || 0),
         discount_amount: Number(form.discount_amount || 0),
-        total_amount: Number(total.toFixed(2)),
         line_items: form.line_items.map((item) => ({
           description: item.description,
           quantity: Number(item.quantity),
-          unit_price: Number(item.unit_price)
+          unit_price: Number(item.unit_price),
+          gst_percent: Number(item.gst_percent)
         }))
       }
 
@@ -68,14 +66,16 @@ function InvoiceForm({ onSuccess }) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <FormSection title="Client Details">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Client Name" required>
-            <input
+          <Field label="Client" required>
+            <select
               required
-              value={form.client_name || ''}
-              onChange={(e) => setForm((prev) => ({ ...prev, client_name: e.target.value }))}
-              placeholder="e.g. Acme Labs"
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder-gray-400"
-            />
+              value={form.client_id || ''}
+              onChange={(e) => setForm((prev) => ({ ...prev, client_id: e.target.value }))}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="" disabled>Select an existing client</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name} {c.state ? `(${c.state})` : '(No State)'}</option>)}
+            </select>
           </Field>
 
           <Field label="Invoice Number" required>
@@ -134,6 +134,18 @@ function InvoiceForm({ onSuccess }) {
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </Field>
+
+              <Field label="GST %" required>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  required
+                  value={item.gst_percent}
+                  onChange={(e) => updateLineItem(index, 'gst_percent', e.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+              </Field>
             </div>
           ))}
 
@@ -168,14 +180,12 @@ function InvoiceForm({ onSuccess }) {
             />
           </Field>
 
-          <Field label="Tax Amount">
+          <Field label={<span>Tax Amount <span className="text-gray-500 text-xs font-normal ml-1">(Calculated automatically on backend via GST rules)</span></span>}>
             <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.tax_amount}
-              onChange={(e) => setForm((prev) => ({ ...prev, tax_amount: e.target.value }))}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              type="text"
+              disabled
+              value="Will be computed automatically"
+              className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-500 shadow-sm"
             />
           </Field>
 
@@ -197,7 +207,7 @@ function InvoiceForm({ onSuccess }) {
             <span className="font-medium text-gray-900">₹ {subtotal.toFixed(2)}</span>
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-3 text-lg font-bold text-gray-900">
-            <span>Total</span>
+            <span>Estimated Total (without tax)</span>
             <span>₹ {total.toFixed(2)}</span>
           </div>
         </div>

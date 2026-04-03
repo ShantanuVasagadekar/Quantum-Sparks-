@@ -4,6 +4,7 @@ import InvoiceDetailModal from '../components/InvoiceDetailModal'
 import PaymentModal from '../components/PaymentModal'
 import StatusBadge from '../components/StatusBadge'
 import { formatCurrency, formatDate } from '../utils/format'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 
 function DashboardPage({ refreshToken }) {
   const [summary, setSummary] = useState(null)
@@ -110,6 +111,17 @@ function DashboardPage({ refreshToken }) {
   const amountReceived = Number(summary.total_collected || 0)
   const amountPending = Number(summary.total_outstanding || 0)
   const overdueAmount = Number(summary.total_overdue || 0)
+  
+  const chartData = [
+    { name: 'Received', value: amountReceived, color: '#10B981' },
+    { name: 'Pending (Not Overdue)', value: Math.max(0, amountPending - overdueAmount), color: '#F59E0B' },
+    { name: 'Overdue', value: overdueAmount, color: '#EF4444' }
+  ].filter(d => d.value > 0)
+
+  // Fallback if all 0
+  if (chartData.length === 0) {
+    chartData.push({ name: 'No Data', value: 1, color: '#E5E7EB' })
+  }
 
   return (
     <div className="space-y-6">
@@ -130,58 +142,88 @@ function DashboardPage({ refreshToken }) {
         <StatCard label="Overdue Amount" value={formatCurrency(overdueAmount)} />
       </section>
 
-      <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-5">
-          <h3 className="text-base font-semibold text-gray-900">Priority Action Required</h3>
-          <p className="mt-1 text-sm text-gray-500">Invoices with approaching due dates or high pending balances.</p>
-        </div>
-        
-        {outstandingInvoices.length === 0 ? (
-          <div className="px-6 py-10 text-center">
-            <p className="text-sm font-medium text-gray-400">All caught up. No outstanding invoices at this time.</p>
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recharts Pie Chart Section */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden p-6 col-span-1 flex flex-col">
+          <h3 className="text-base font-semibold text-gray-900 mb-4">Collection Overview</h3>
+          <div className="flex-1 w-full h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend verticalAlign="bottom" height={36}/>
+              </PieChart>
+            </ResponsiveContainer>
           </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {outstandingInvoices.map((invoice) => (
-              <div key={invoice.id} className="p-6 transition-colors hover:bg-gray-50/50">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(invoice.outstanding_amount)}</p>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="font-medium text-gray-700">{invoice.client_name}</span>
-                      <span className="text-gray-400">&bull;</span>
-                      <span className="text-gray-500">Due {formatDate(invoice.due_date)}</span>
+        </div>
+
+        {/* Priority Action Required */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden lg:col-span-2">
+          <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-5">
+            <h3 className="text-base font-semibold text-gray-900">Priority Action Required</h3>
+            <p className="mt-1 text-sm text-gray-500">Invoices with approaching due dates or high pending balances.</p>
+          </div>
+          
+          {outstandingInvoices.length === 0 ? (
+            <div className="px-6 py-10 text-center">
+              <p className="text-sm font-medium text-gray-400">All caught up. No outstanding invoices at this time.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100 overflow-y-auto max-h-[300px]">
+              {outstandingInvoices.map((invoice) => (
+                <div key={invoice.id} className="p-6 transition-colors hover:bg-gray-50/50">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-lg font-bold text-gray-900">{formatCurrency(invoice.outstanding_amount)}</p>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="font-medium text-gray-700">{invoice.client_name}</span>
+                        <span className="text-gray-400">&bull;</span>
+                        <span className="text-gray-500">Due {formatDate(invoice.due_date)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge status={invoice.status} />
+                      <div className="h-4 w-px bg-gray-200 mx-2 hidden md:block"></div>
+                      <button
+                        onClick={() => openDetail(invoice.id)}
+                        className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => setSelectedInvoice(invoice)}
+                        className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                      >
+                        Add Payment
+                      </button>
+                      <button
+                        onClick={() => sendReminder(invoice.id)}
+                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
+                      >
+                        {copiedInvoiceId === invoice.id ? 'Copied Link' : 'Send Reminder'}
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge status={invoice.status} />
-                    <div className="h-4 w-px bg-gray-200 mx-2 hidden lg:block"></div>
-                    <button
-                      onClick={() => openDetail(invoice.id)}
-                      className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => setSelectedInvoice(invoice)}
-                      className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                    >
-                      Record Payment
-                    </button>
-                    <button
-                      onClick={() => sendReminder(invoice.id)}
-                      className="rounded-md bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                    >
-                      {copiedInvoiceId === invoice.id ? 'Copied Link' : 'Send Reminder'}
-                    </button>
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </section>
+
 
       <section className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-5">

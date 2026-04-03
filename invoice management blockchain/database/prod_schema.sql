@@ -26,14 +26,28 @@ CREATE TABLE IF NOT EXISTS users (
   id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   email               TEXT        UNIQUE NOT NULL,
   business_name       TEXT        NOT NULL,
+  owner_name          TEXT,
+  gst_number          TEXT,
+  phone               TEXT,
+  address             TEXT,
+  city                TEXT,
+  state               TEXT,
+  pincode             TEXT,
   algo_wallet_address TEXT,
   password_hash       TEXT,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Ensure password_hash exists on pre-existing tables
+-- Ensure columns exist on pre-existing tables
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_name TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gst_number TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pincode TEXT;
 
 -- ============================================================
 -- CLIENTS
@@ -76,6 +90,9 @@ CREATE TABLE IF NOT EXISTS invoices (
   currency             TEXT            NOT NULL DEFAULT 'INR',
   subtotal_amount      NUMERIC(14,2)   NOT NULL DEFAULT 0,
   tax_amount           NUMERIC(14,2)   NOT NULL DEFAULT 0,
+  cgst_amount          NUMERIC(14,2)   NOT NULL DEFAULT 0,
+  sgst_amount          NUMERIC(14,2)   NOT NULL DEFAULT 0,
+  igst_amount          NUMERIC(14,2)   NOT NULL DEFAULT 0,
   discount_amount      NUMERIC(14,2)   NOT NULL DEFAULT 0,
   total_amount         NUMERIC(14,2)   NOT NULL,
   paid_amount          NUMERIC(14,2)   NOT NULL DEFAULT 0,
@@ -116,6 +133,9 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS description         TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency            TEXT          DEFAULT 'INR';
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subtotal_amount     NUMERIC(14,2) DEFAULT 0;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_amount          NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cgst_amount         NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sgst_amount         NUMERIC(14,2) DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS igst_amount         NUMERIC(14,2) DEFAULT 0;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_amount     NUMERIC(14,2) DEFAULT 0;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS issue_date          DATE;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at             TIMESTAMPTZ;
@@ -142,6 +162,7 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
   description TEXT          NOT NULL,
   quantity    NUMERIC(12,2) NOT NULL,
   unit_price  NUMERIC(14,2) NOT NULL,
+  gst_percent NUMERIC(5,2)  NOT NULL DEFAULT 0,
   line_total  NUMERIC(14,2) NOT NULL,
   sort_order  INT           NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),

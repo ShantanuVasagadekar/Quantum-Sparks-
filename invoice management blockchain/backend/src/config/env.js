@@ -20,5 +20,7 @@ module.exports = {
   businessAddress: process.env.BUSINESS_ADDRESS || '123 Street Address',
   businessCityState: process.env.BUSINESS_CITY_STATE || 'Mumbai, MH 400001',
   businessPhone: process.env.BUSINESS_PHONE || '(000) 000-0000',
-  businessEmail: process.env.BUSINESS_EMAIL || 'contact@yourbusiness.com'
+  businessEmail: process.env.BUSINESS_EMAIL || 'contact@yourbusiness.com',
+  emailUser: process.env.EMAIL_USER,
+  emailPass: process.env.EMAIL_PASS
 }

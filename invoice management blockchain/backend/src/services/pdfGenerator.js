@@ -74,6 +74,10 @@ function drawHeader(doc, invoice, business, fonts) {
   doc.text(`Phone: ${business?.phone || '(000) 000-0000'}`, leftX, y, { width: 290 })
   y += 14
   doc.text(`Email: ${business?.email || 'contact@yourbusiness.com'}`, leftX, y, { width: 290 })
+  if (business?.gst_number) {
+    y += 14
+    doc.text(`GST No: ${business.gst_number}`, leftX, y, { width: 290 })
+  }
 
   let rightY = MARGIN
   doc.font(fonts.bold).fontSize(30).fillColor('#111827')
@@ -197,6 +201,9 @@ function drawTable(doc, invoice, lineItems, y, fonts) {
 
 function drawTotals(doc, invoice, computedSubtotal, y, fonts) {
   const subtotal = Number(invoice.subtotal_amount ?? computedSubtotal ?? 0)
+  const cgst = Number(invoice.cgst_amount || 0)
+  const sgst = Number(invoice.sgst_amount || 0)
+  const igst = Number(invoice.igst_amount || 0)
   const tax = Number(invoice.tax_amount || 0)
   const discount = Number(invoice.discount_amount || 0)
   const total = Number(invoice.total_amount ?? subtotal + tax - discount)
@@ -206,10 +213,20 @@ function drawTotals(doc, invoice, computedSubtotal, y, fonts) {
   let rowY = y
 
   const rows = [
-    ['Subtotal', formatCurrency(subtotal)],
-    ['Tax', formatCurrency(tax)],
-    ['Discount', formatCurrency(discount)]
+    ['Taxable Amount', formatCurrency(subtotal)]
   ]
+  if (cgst > 0 || sgst > 0) {
+    rows.push(['CGST', formatCurrency(cgst)])
+    rows.push(['SGST', formatCurrency(sgst)])
+  } else if (igst > 0) {
+    rows.push(['IGST', formatCurrency(igst)])
+  } else if (tax > 0) {
+    rows.push(['Tax Amount', formatCurrency(tax)])
+  }
+  
+  if (discount > 0) {
+    rows.push(['Discount', formatCurrency(discount)])
+  }
 
   doc.moveTo(boxX, rowY - 8).lineTo(boxX + boxWidth, rowY - 8).strokeColor('#D1D5DB').lineWidth(1).stroke()
 

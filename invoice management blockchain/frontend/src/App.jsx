@@ -6,6 +6,7 @@ import ClientsPage from './pages/ClientsPage'
 import DashboardPage from './pages/DashboardPage'
 import InvoicesPage from './pages/InvoicesPage'
 import LoginPage from './pages/LoginPage'
+import ProfilePage from './pages/ProfilePage'
 
 const Icons = {
   Home: () => (
@@ -93,9 +94,9 @@ function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200">
-                      <span className="text-sm font-medium text-indigo-700">A</span>
-                    </div>
+                    <NavLink to="/profile" className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center border border-indigo-200 hover:bg-indigo-200 transition-colors" title="My Profile">
+                      <span className="text-sm font-medium text-indigo-700">⚙️</span>
+                    </NavLink>
                   </div>
                 </header>
 
@@ -107,6 +108,7 @@ function App() {
                       <Route path="/invoices" element={<InvoicesPage refreshToken={refreshToken} />} />
                       <Route path="/clients" element={<ClientsPage refreshToken={refreshToken} />} />
                       <Route path="/invoices/new" element={<CreateInvoicePage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
                     </Routes>
                   </div>
                 </main>

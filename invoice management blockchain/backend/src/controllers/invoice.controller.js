@@ -4,16 +4,18 @@ const invoiceService = require('../services/invoice.service')
 const { generateInvoicePDF } = require('../services/pdfGenerator')
 
 const lineItemSchema = z.object({
-  description: z.string().optional(),
+  description: z.string().min(1, 'Description is required'),
   name: z.string().optional(),
   quantity: z.coerce.number().positive().optional(),
   qty: z.coerce.number().positive().optional(),
   unit_price: z.coerce.number().nonnegative().optional(),
-  rate: z.coerce.number().nonnegative().optional()
+  rate: z.coerce.number().nonnegative().optional(),
+  gst_percent: z.coerce.number().nonnegative().optional().default(0)
 }).transform((item) => ({
   description: item.description || item.name,
   quantity: Number(item.quantity ?? item.qty),
-  unit_price: Number(item.unit_price ?? item.rate)
+  unit_price: Number(item.unit_price ?? item.rate),
+  gst_percent: Number(item.gst_percent)
 }))
 
 const invoiceCreateSchema = z.object({
@@ -150,11 +152,12 @@ async function pdf(req, res, next) {
   try {
     const data = await invoiceService.getInvoicePdfData(req.user.id, req.params.id)
     const business = {
-      company_name: env.businessName,
-      address: env.businessAddress,
-      city_state_zip: env.businessCityState,
-      phone: env.businessPhone,
-      email: env.businessEmail
+      company_name: data.business.company_name || env.businessName,
+      address: data.business.address || env.businessAddress,
+      city_state_zip: data.business.city_state_zip || env.businessCityState,
+      phone: data.business.phone || env.businessPhone,
+      email: data.business.email || env.businessEmail,
+      gst_number: data.business.gst_number || undefined
     }
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="invoice-${data.invoice.invoice_number}.pdf"`)

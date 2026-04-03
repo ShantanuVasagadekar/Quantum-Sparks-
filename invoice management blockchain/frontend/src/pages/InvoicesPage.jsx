@@ -36,9 +36,16 @@ function InvoicesPage({ refreshToken }) {
   async function sendReminder(invoiceId) {
     try {
       const res = await api.post(`/invoices/${invoiceId}/reminder`)
-      await navigator.clipboard.writeText(res.data.message)
-      setCopiedInvoiceId(invoiceId)
-      setTimeout(() => setCopiedInvoiceId(''), 1500)
+      if (res.data.email_sent) {
+        alert('Email reminder sent successfully!')
+        setCopiedInvoiceId(invoiceId)
+        setTimeout(() => setCopiedInvoiceId(''), 1500)
+      } else {
+        await navigator.clipboard.writeText(res.data.message)
+        setCopiedInvoiceId(invoiceId)
+        setTimeout(() => setCopiedInvoiceId(''), 1500)
+        alert('Client has no email. Reminder text copied to clipboard.')
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to send reminder message.')
     }
@@ -146,7 +153,7 @@ function InvoicesPage({ refreshToken }) {
                           onClick={() => sendReminder(invoice.id)}
                           className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                         >
-                          {copiedInvoiceId === invoice.id ? 'Copied' : 'Send Reminder'}
+                          {copiedInvoiceId === invoice.id ? 'Sent/Copied' : 'Send Reminder'}
                         </button>
                         <button
                           onClick={() => verifyInvoice(invoice.id)}

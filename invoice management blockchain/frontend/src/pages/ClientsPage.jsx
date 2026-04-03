@@ -6,6 +6,10 @@ function ClientsPage({ refreshToken }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', company_name: '', email: '', phone: '', state: '' })
+  const [formLoading, setFormLoading] = useState(false)
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -33,12 +37,72 @@ function ClientsPage({ refreshToken }) {
     }
   }, [refreshToken])
 
+  async function handleCreateClient(e) {
+    e.preventDefault()
+    setFormLoading(true)
+    setFormError('')
+    try {
+      const res = await api.post('/clients', form)
+      setClients(prev => [res.data, ...prev])
+      setShowForm(false)
+      setForm({ name: '', company_name: '', email: '', phone: '', state: '' })
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Unable to create client')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  const indianStates = [
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Lakshadweep", "Puducherry"
+  ];
+
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">My Clients</h2>
-        <p className="text-sm text-gray-400">Keep your customer contact details in one place.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">My Clients</h2>
+          <p className="text-sm text-gray-400">Keep your customer contact details in one place.</p>
+        </div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+        >
+          {showForm ? 'Cancel' : '+ Add Client'}
+        </button>
       </div>
+
+      {showForm && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <form onSubmit={handleCreateClient} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Client Name <span className="text-red-500">*</span>
+                <input required value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm" />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                State <span className="text-red-500">* (Required for GST)</span>
+                <select required value={form.state} onChange={e => setForm(f => ({...f, state: e.target.value}))} className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm text-gray-900 bg-white">
+                  <option value="" disabled>Select state</option>
+                  {indianStates.map(st => <option key={st} value={st}>{st}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Company Name
+                <input value={form.company_name} onChange={e => setForm(f => ({...f, company_name: e.target.value}))} className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm" />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Email
+                <input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm" />
+              </label>
+            </div>
+            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            <button type="submit" disabled={formLoading} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 disabled:opacity-50">
+              {formLoading ? 'Saving...' : 'Save Client'}
+            </button>
+          </form>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         {loading ? (
@@ -60,6 +124,7 @@ function ClientsPage({ refreshToken }) {
                   <th className="py-3 pl-6 pr-4 font-semibold">Name</th>
                   <th className="py-3 px-4 font-semibold">Company</th>
                   <th className="py-3 px-4 font-semibold">Phone</th>
+                  <th className="py-3 px-4 font-semibold">State</th>
                   <th className="py-3 px-4 font-semibold">Email</th>
                 </tr>
               </thead>
@@ -68,7 +133,7 @@ function ClientsPage({ refreshToken }) {
                   <tr key={client.id} className="transition-colors hover:bg-gray-50/50">
                     <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{client.name}</td>
                     <td className="py-4 px-4 text-gray-600">{client.company_name || '-'}</td>
-                    <td className="py-4 px-4 text-gray-500">{client.phone || '-'}</td>
+                    <td className="py-4 px-4 text-gray-500">{client.state || '-'}</td>
                     <td className="py-4 px-4 text-gray-500">{client.email || '-'}</td>
                   </tr>
                 ))}
