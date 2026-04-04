@@ -212,15 +212,48 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
   )
 }
 
+async function ensureUser(client) {
+  // Upsert the demo user and return the actual user_id from the DB
+  const email = process.env.FAKER_USER_EMAIL || 'demo@quantumsparks.com'
+  // bcrypt hash of 'password123'
+  const passwordHash = '$2b$10$w09dK1L/ZfS3P6P6X7t4O.5yF4y.U9L0u6T5X0v1mO7K4Y7Yv7dWu'
+
+  const result = await client.query(
+    `INSERT INTO users (email, password_hash, business_name, owner_name, gst_number, phone, address, city, state, pincode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (email) DO UPDATE SET updated_at = now()
+     RETURNING id`,
+    [
+      email,
+      passwordHash,
+      'Quantum Sparks Pvt Ltd',
+      'Shantanu Vasagadekar',
+      '27AABCQ1234A1Z5',
+      '9876543210',
+      '12, Inspire Hub, Bandra Kurla Complex',
+      'Mumbai',
+      'Maharashtra',
+      '400051',
+    ]
+  )
+  const userId = result.rows[0].id
+  console.log(`Demo user ensured: ${email} (id: ${userId})`)
+  return userId
+}
+
 async function runSeed(options = {}) {
   const closePoolOnExit = options.closePoolOnExit !== false
   const client = await pool.connect()
   try {
     console.log('Starting faker seed...')
     await client.query('BEGIN')
+
+    // Step 1: Ensure user exists and get the real user_id from DB
+    const userId = await ensureUser(client)
+
     const capabilities = {
       lineItemsHasGstPercent: await hasColumn(client, 'invoice_line_items', 'gst_percent'),
-      lineItemsHasGstAmount: await hasColumn(client, 'invoice_line_items', 'gst_amount'),
+      lineItemsHasGstAmount:  await hasColumn(client, 'invoice_line_items', 'gst_amount'),
       paymentsHasSourceAndStatus:
         (await hasColumn(client, 'payments', 'source')) &&
         (await hasColumn(client, 'payments', 'status')),
@@ -230,23 +263,25 @@ async function runSeed(options = {}) {
       console.warn('Warning: invoice_line_items.gst_percent missing. Seeding without GST columns.')
     }
 
+    // Step 2: Create clients using the real user_id
     const clients = []
     for (let i = 0; i < CLIENT_COUNT; i += 1) {
       // eslint-disable-next-line no-await-in-loop
-      clients.push(await createClient(client, USER_ID))
+      clients.push(await createClient(client, userId))
     }
     console.log(`Created ${clients.length} clients`)
 
+    // Step 3: Create invoices using the real user_id and real client.ids
     for (let i = 1; i <= INVOICE_COUNT; i += 1) {
       const selectedClient = faker.helpers.arrayElement(clients)
       const invoiceNumber = `INV-${new Date().getFullYear()}-${String(i).padStart(5, '0')}-${faker.number.int({ min: 10, max: 99 })}`
       // eslint-disable-next-line no-await-in-loop
-      await createInvoiceWithDetails(client, USER_ID, invoiceNumber, selectedClient, capabilities)
+      await createInvoiceWithDetails(client, userId, invoiceNumber, selectedClient, capabilities)
       if (i % 50 === 0) console.log(`Created ${i}/${INVOICE_COUNT} invoices...`)
     }
 
     await client.query('COMMIT')
-    console.log(`Seeded ${CLIENT_COUNT} clients and ${INVOICE_COUNT} invoices for user ${USER_ID}`)
+    console.log(`Seeded ${CLIENT_COUNT} clients and ${INVOICE_COUNT} invoices for user ${userId}`)
   } catch (error) {
     await client.query('ROLLBACK')
     console.error('Faker seed failed:', error.message)
