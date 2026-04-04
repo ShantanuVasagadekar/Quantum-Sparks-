@@ -30,11 +30,12 @@ function toByteArray(value: any) {
 }
 
 export default function AlgoPaymentButton({ invoice, onPaid, apiOverride, portalToken }: { invoice: any, onPaid?: () => void, apiOverride?: any, portalToken?: string }) {
-  const { isConnected, walletAddress, connectWallet, signTransactions } = useWallet()
+  const { isConnected, walletAddress, connectWallet, signTransactions } = useWallet() as any
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
 
   const requestApi = apiOverride || api
+  const metaEnv = (import.meta as any).env
 
   async function handlePay() {
     try {
@@ -43,15 +44,15 @@ export default function AlgoPaymentButton({ invoice, onPaid, apiOverride, portal
 
       const algosdk: any = await loadBrowserAlgodSdk()
       const algodClient = new algosdk.Algodv2(
-        import.meta.env.VITE_ALGO_NODE_TOKEN || '',
-        import.meta.env.VITE_ALGO_NODE_URL || 'https://testnet-api.algonode.cloud',
-        import.meta.env.VITE_ALGO_NODE_PORT || 443
+        metaEnv.VITE_ALGO_NODE_TOKEN || '',
+        metaEnv.VITE_ALGO_NODE_URL || 'https://testnet-api.algonode.cloud',
+        metaEnv.VITE_ALGO_NODE_PORT || 443
       )
 
       const sender = isConnected ? walletAddress : await connectWallet()
       if (!sender) throw new Error('Wallet connection required')
 
-      const receiver = import.meta.env.VITE_ALGO_BUSINESS_WALLET || import.meta.env.VITE_ALGORAND_BUSINESS_WALLET
+      const receiver = metaEnv.VITE_ALGO_BUSINESS_WALLET || metaEnv.VITE_ALGORAND_BUSINESS_WALLET
       if (!receiver) throw new Error('Business wallet address is not configured')
 
       const amountMicroAlgos = Math.round(Number(invoice.outstanding_amount) * 1_000_000)

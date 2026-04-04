@@ -68,15 +68,15 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
   }
 
   const handleDispute = async () => {
-    const reason = window.prompt('Enter a reason for disputing this invoice (optional):')
+    const reason = window.prompt('Enter a reason for querying this receivable (optional):')
     if (reason === null) return // cancelled
     try {
       setDisputing(true)
       await api.post(`/invoices/${invoice.id}/dispute`, { reason })
-      showToast('Invoice marked as disputed.', 'success')
+      showToast('Receivable logically marked as Queried.', 'success')
       if (onRefresh) await onRefresh()
     } catch (err) {
-      showToast(err.response?.data?.error || 'Failed to dispute invoice.', 'error')
+      showToast(err.response?.data?.error || 'Failed to query the receivable.', 'error')
     } finally {
       setDisputing(false)
     }
@@ -123,7 +123,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E5E7EB] bg-white px-6 py-4">
           <div className="flex items-center gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-[#111827]">Invoice Details</h3>
+              <h3 className="text-lg font-semibold text-[#111827]">Receivable Profile</h3>
               <p className="text-sm text-[#6B7280]">{invoice.invoice_number}</p>
             </div>
             <StatusBadge status={invoice.status} />
@@ -168,10 +168,12 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
                 </button>
               )}
 
-              {canDispute && (
-                <button onClick={handleDispute} disabled={disputing}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[#DC2626] bg-white px-3.5 py-2 text-sm font-semibold text-[#DC2626] hover:bg-red-50 disabled:opacity-50 transition-colors">
-                  {disputing ? 'Filing dispute…' : 'Dispute Invoice'}
+              {(canAccept || canPay) && (
+                <button
+                  onClick={handleDispute} disabled={disputing}
+                  className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                >
+                  {disputing ? 'Processing…' : 'Query Term'}
                 </button>
               )}
 

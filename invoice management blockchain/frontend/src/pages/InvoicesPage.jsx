@@ -258,9 +258,9 @@ function InvoicesPage({ refreshToken }) {
                                 ? 'border-[#E5E7EB] bg-white text-[#111827] hover:bg-gray-50'
                                 : 'border-[#E5E7EB] bg-white text-[#6B7280] cursor-not-allowed opacity-60'
                             }`}
-                            title={!canPay ? 'Invoice must be accepted first' : ''}
+                            title={!canPay ? 'Receivable must be accepted first' : ''}
                           >
-                            Add Payment
+                            Record Remittance
                           </button>
                           {invoice.status !== 'cancelled' && invoice.status !== 'disputed' && (
                             <Link

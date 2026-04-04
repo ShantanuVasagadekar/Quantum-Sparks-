@@ -2,9 +2,9 @@ services:
   - type: web
     name: invoice-tracker-backend
     env: node
-    rootDir: invoice management blockchain/backend
+    rootDir: backend
     buildCommand: npm install
-    startCommand: npm run start
+    startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

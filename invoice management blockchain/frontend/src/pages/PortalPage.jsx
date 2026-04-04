@@ -137,7 +137,7 @@ export default function PortalPage() {
                onClick={handleDispute} disabled={actionLoading}
                className="rounded-lg border-2 border-red-100 bg-white px-5 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-all"
              >
-               Dispute Invoice
+               Query Term
              </button>
           )}
           {canPay && (

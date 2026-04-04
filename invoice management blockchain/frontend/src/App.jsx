@@ -58,7 +58,7 @@ function App() {
                   <div className="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center mr-3">
                     <span className="text-white font-bold text-sm">IM</span>
                   </div>
-                  <h1 className="text-lg font-bold text-gray-900">Invoice Hub</h1>
+                  <h1 className="text-lg font-bold text-gray-900">Billing Dashboard</h1>
                 </div>
                 
                 <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
@@ -76,7 +76,7 @@ function App() {
                     activeClasses="bg-indigo-50 text-indigo-600"
                     hoverClasses="hover:bg-gray-50 hover:text-gray-900"
                   >
-                    Invoices
+                    Receivables
                   </NavTab>
                   <NavTab 
                     to="/clients" 
@@ -84,7 +84,7 @@ function App() {
                     activeClasses="bg-indigo-50 text-indigo-600"
                     hoverClasses="hover:bg-gray-50 hover:text-gray-900"
                   >
-                    Clients
+                    Accounts
                   </NavTab>
                   
                   <div className="pt-8 pb-3">
@@ -96,7 +96,7 @@ function App() {
                     activeClasses="bg-gray-100 text-gray-900"
                     hoverClasses="hover:bg-gray-50 hover:text-gray-900"
                   >
-                    Create Invoice
+                    Generate Invoice
                   </NavTab>
                 </nav>
 
