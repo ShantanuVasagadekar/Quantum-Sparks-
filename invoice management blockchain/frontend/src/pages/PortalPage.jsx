@@ -8,8 +8,11 @@ import AlgoPaymentButton from '../components/AlgoPaymentButton'
 import VerificationBadge from '../components/VerificationBadge'
 import { useToast } from '../ui/ToastContext'
 
+const isProd = import.meta.env.PROD
+const apiUrl = import.meta.env.VITE_API_URL || (isProd ? 'https://quantum-sparks.onrender.com' : 'http://localhost:5000/api')
+
 const PUBLIC_API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: apiUrl,
   headers: { 'Content-Type': 'application/json' }
 })
 
