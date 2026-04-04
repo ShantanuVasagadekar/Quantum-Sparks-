@@ -46,6 +46,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/portal/:token" element={<PortalPage />} />
+      <Route path="/test" element={<div style={{padding:40,fontSize:24}}>✅ TEST ROUTE OK — React Router is working!</div>} />
       <Route
         path="/*"
         element={
@@ -118,12 +119,13 @@ function App() {
                 <main className="flex-1 overflow-auto">
                   <div className="max-w-7xl mx-auto px-8 py-8">
                     <Routes>
-                      <Route path="/" element={<DashboardPage refreshToken={refreshToken} />} />
-                      <Route path="/invoices" element={<InvoicesPage refreshToken={refreshToken} />} />
-                      <Route path="/clients" element={<ClientsPage refreshToken={refreshToken} />} />
-                      <Route path="/invoices/new" element={<CreateInvoicePage />} />
-                      <Route path="/invoices/:id/edit" element={<EditInvoicePage />} />
-                      <Route path="/profile" element={<ProfilePage />} />
+                      <Route index element={<DashboardPage refreshToken={refreshToken} />} />
+                      <Route path="invoices" element={<InvoicesPage refreshToken={refreshToken} />} />
+                      <Route path="clients" element={<ClientsPage refreshToken={refreshToken} />} />
+                      <Route path="invoices/new" element={<CreateInvoicePage />} />
+                      <Route path="invoices/:id/edit" element={<EditInvoicePage />} />
+                      <Route path="profile" element={<ProfilePage />} />
+                      <Route path="*" element={<div className="p-8 text-gray-500 text-center">Page not found</div>} />
                     </Routes>
                   </div>
                 </main>
