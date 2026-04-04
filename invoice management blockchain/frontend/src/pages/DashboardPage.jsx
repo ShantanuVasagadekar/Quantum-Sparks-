@@ -17,15 +17,15 @@ const ChartTooltip = ({ active, payload, label }) => {
 }
 
 export default function DashboardPage({ refreshToken }) {
-  const [summary, setSummary]                   = useState(null)
-  const [invoices, setInvoices]                 = useState([])
+  const [summary, setSummary] = useState(null)
+  const [invoices, setInvoices] = useState([])
   const [collectionsTrend, setCollectionsTrend] = useState([])
-  const [detailInvoice, setDetailInvoice]       = useState(null)
-  const [detailTimeline, setDetailTimeline]     = useState([])
-  const [detailPayments, setDetailPayments]     = useState([])
-  const [selectedInvoice, setSelectedInvoice]   = useState(null)
-  const [anchoring, setAnchoring]               = useState(false)
-  const [error, setError]                       = useState('')
+  const [detailInvoice, setDetailInvoice] = useState(null)
+  const [detailTimeline, setDetailTimeline] = useState([])
+  const [detailPayments, setDetailPayments] = useState([])
+  const [selectedInvoice, setSelectedInvoice] = useState(null)
+  const [anchoring, setAnchoring] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -95,16 +95,16 @@ export default function DashboardPage({ refreshToken }) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100 border border-[#E5E7EB]" />)}
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100 border border-[#E5E7EB]" />)}
         </div>
       </div>
     )
   }
 
-  const totalInvoiced   = Number(summary.total_invoiced   || 0)
-  const amountReceived  = Number(summary.total_collected  || 0)
-  const amountPending   = Number(summary.total_outstanding || 0)
-  const overdueCount    = Number(summary.overdue_count    || 0)
+  const totalInvoiced = Number(summary.total_invoiced || 0)
+  const amountReceived = Number(summary.total_collected || 0)
+  const amountPending = Number(summary.total_outstanding || 0)
+  const overdueCount = Number(summary.overdue_count || 0)
 
   return (
     <div className="space-y-6">
@@ -121,10 +121,10 @@ export default function DashboardPage({ refreshToken }) {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Gross Billings"     value={formatCurrency(totalInvoiced)}  />
-        <KpiCard label="Cash Received"      value={formatCurrency(amountReceived)} color="success" />
-        <KpiCard label="Unpaid Receivables" value={formatCurrency(amountPending)}  color="warning" />
-        <KpiCard label="Past Due"           value={overdueCount}                   color={overdueCount > 0 ? 'danger' : 'neutral'} suffix="invoices" />
+        <KpiCard label="Gross Billings" value={formatCurrency(totalInvoiced)} />
+        <KpiCard label="Cash Received" value={formatCurrency(amountReceived)} color="success" />
+        <KpiCard label="Unpaid Receivables" value={formatCurrency(amountPending)} color="warning" />
+        <KpiCard label="Past Due" value={overdueCount} color={overdueCount > 0 ? 'danger' : 'neutral'} suffix="invoices" />
       </div>
 
       {/* Main grid */}
@@ -143,14 +143,14 @@ export default function DashboardPage({ refreshToken }) {
                   <AreaChart data={collectionsTrend} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                     <defs>
                       <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor="#2563EB" stopOpacity={0.12} />
+                        <stop offset="0%" stopColor="#2563EB" stopOpacity={0.12} />
                         <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF' }} dy={8} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                      tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+                      tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
                     <RechartsTooltip content={<ChartTooltip />} cursor={{ stroke: '#E5E7EB' }} />
                     <Area type="monotone" dataKey="collected" stroke="#2563EB" strokeWidth={1.5}
                       fillOpacity={1} fill="url(#rev)" dot={false} />
@@ -192,7 +192,7 @@ export default function DashboardPage({ refreshToken }) {
           <Card title="Needs Attention">
             {pendingActions.length === 0 ? (
               <div className="py-8 text-center">
-                <p className="text-sm text-[#6B7280]">All caught up 🎉</p>
+                <p className="text-sm text-[#6B7280]">All caught up </p>
               </div>
             ) : (
               <div className="divide-y divide-[#E5E7EB]">
@@ -209,7 +209,7 @@ export default function DashboardPage({ refreshToken }) {
                       </div>
                     </div>
                     <div className="mt-2 flex gap-3">
-                      {['accepted','partial'].includes(inv.status) && (
+                      {['accepted', 'partial'].includes(inv.status) && (
                         <button onClick={() => setSelectedInvoice(inv)}
                           className="text-xs font-medium text-[#2563EB] hover:underline">
                           Record Payment
@@ -275,7 +275,7 @@ export default function DashboardPage({ refreshToken }) {
 const COLOR = {
   success: { label: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' },
   warning: { label: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
-  danger:  { label: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+  danger: { label: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
   neutral: { label: '#6B7280', bg: '#F9FAFB', border: '#E5E7EB' },
 }
 
