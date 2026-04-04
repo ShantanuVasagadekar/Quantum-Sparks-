@@ -16,23 +16,35 @@ export default function TopBar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchInput, setSearchInput] = useState('')
-  const searchEnabled = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/clients')
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     setSearchInput(params.get('search') || '')
-  }, [location.search])
+  }, [location.pathname]) // Only sync initially when page changes
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (!searchEnabled) return
       const params = new URLSearchParams(location.search)
-      if (searchInput.trim()) params.set('search', searchInput.trim())
-      else params.delete('search')
-      navigate(`${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`, { replace: true })
-    }, 300)
+      const currentQuery = params.get('search') || ''
+      const trimmed = searchInput.trim()
+      
+      if (trimmed !== currentQuery) {
+        // If we're on a non-searchable view (like Dashboard or Profile) and try to search,
+        // redirect them to the Invoices list page to see the results.
+        if (!location.pathname.startsWith('/invoices') && !location.pathname.startsWith('/clients')) {
+          if (trimmed) {
+             navigate(`/invoices?search=${encodeURIComponent(trimmed)}`)
+          }
+        } else {
+          // Normal filter for Invoices and Clients pages
+          if (trimmed) params.set('search', trimmed)
+          else params.delete('search')
+          navigate(`${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`, { replace: true })
+        }
+      }
+    }, 350)
     return () => clearTimeout(timeout)
-  }, [searchInput, searchEnabled, location.pathname, location.search, navigate])
+  }, [searchInput, location.pathname, location.search, navigate])
 
   async function handleConnect() {
     try {
@@ -54,11 +66,10 @@ export default function TopBar() {
         <div className="relative w-96">
           <input
             type="text"
-            placeholder={searchEnabled ? 'Search invoices or clients...' : 'Search available in Invoices and Clients'}
+            placeholder="Search invoices, clients..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-full h-9 rounded-md border border-gray-300 pl-10 pr-4 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-gray-900 placeholder-gray-500"
-            disabled={!searchEnabled}
           />
           <svg className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
         </div>

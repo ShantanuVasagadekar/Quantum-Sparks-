@@ -29,10 +29,12 @@ function toByteArray(value: any) {
   return new Uint8Array(value)
 }
 
-export default function AlgoPaymentButton({ invoice, onPaid }) {
+export default function AlgoPaymentButton({ invoice, onPaid, apiOverride, portalToken }: { invoice: any, onPaid?: () => void, apiOverride?: any, portalToken?: string }) {
   const { isConnected, walletAddress, connectWallet, signTransactions } = useWallet()
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+
+  const requestApi = apiOverride || api
 
   async function handlePay() {
     try {
@@ -67,10 +69,16 @@ export default function AlgoPaymentButton({ invoice, onPaid }) {
       const signedBlobs = Array.isArray(signed) ? signed.map(toByteArray) : [toByteArray(signed)]
       const submitResult = await algodClient.sendRawTransaction(signedBlobs).do()
 
-      await api.post('/payments/crypto', {
-        invoice_id: invoice.id,
-        txn_id: submitResult.txId
-      })
+      if (portalToken) {
+         await requestApi.post(`/portal/${portalToken}/crypto-pay`, {
+           txn_id: submitResult.txId
+         })
+      } else {
+         await requestApi.post('/payments/crypto', {
+           invoice_id: invoice.id,
+           txn_id: submitResult.txId
+         })
+      }
 
       setStatus('confirmed')
       if (onPaid) await onPaid()

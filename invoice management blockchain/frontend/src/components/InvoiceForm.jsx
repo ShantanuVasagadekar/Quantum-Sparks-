@@ -11,7 +11,7 @@ function createLineItem(gst = 0) {
   }
 }
 
-function InvoiceForm({ onSuccess }) {
+function InvoiceForm({ onSuccess, invoice }) {
   const [clients, setClients] = useState([])
   const [clientMode, setClientMode] = useState('existing')
   const [clientSearch, setClientSearch] = useState('')
@@ -21,28 +21,70 @@ function InvoiceForm({ onSuccess }) {
     email: '',
     phone: '',
     address: '',
+    state: '',
     gst_number: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState({
-    client_id: '',
-    invoice_number: `INV-${Date.now().toString().slice(-6)}`,
-    title: '',
-    description: '',
-    issue_date: new Date().toISOString().slice(0, 10),
-    due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
-    discount_amount: 0,
-    business_name: '',
-    gst_number: '',
-    address: '',
-    email: '',
-    phone: '',
-    default_gst_percent: 18,
-    terms: '',
-    notes: '',
-    line_items: [createLineItem(18)]
+
+  const isEdit = Boolean(invoice)
+
+  const [form, setForm] = useState(() => {
+    if (isEdit) {
+      return {
+        client_id: invoice.client_id || '',
+        invoice_number: invoice.invoice_number,
+        title: invoice.title || '',
+        description: invoice.description || '',
+        issue_date: (invoice.issue_date || invoice.created_at || '').slice(0, 10),
+        due_date: (invoice.due_date || '').slice(0, 10),
+        discount_amount: invoice.discount_amount || 0,
+        business_name: invoice.metadata?.business?.business_name || '',
+        gst_number: invoice.metadata?.business?.gst_number || '',
+        address: invoice.metadata?.business?.address || '',
+        email: invoice.metadata?.business?.email || '',
+        phone: invoice.metadata?.business?.phone || '',
+        default_gst_percent: invoice.line_items?.[0]?.gst_percent || 18,
+        terms: invoice.metadata?.terms || '',
+        notes: invoice.metadata?.notes || '',
+        payment_mode: invoice.metadata?.payment_mode || 'Bank Transfer',
+        line_items: invoice.line_items && invoice.line_items.length > 0 
+          ? invoice.line_items.map((item) => ({ 
+              _id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              ...item 
+            }))
+          : [createLineItem(18)]
+      }
+    }
+    return {
+      client_id: '',
+      invoice_number: `INV-${Date.now().toString().slice(-6)}`,
+      title: '',
+      description: '',
+      issue_date: new Date().toISOString().slice(0, 10),
+      due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+      discount_amount: 0,
+      business_name: '',
+      gst_number: '',
+      address: '',
+      email: '',
+      phone: '',
+      default_gst_percent: 18,
+      terms: '',
+      notes: '',
+      payment_mode: 'Bank Transfer',
+      line_items: [createLineItem(18)]
+    }
   })
+
+  useEffect(() => {
+    if (isEdit && invoice.client_id && clients.length === 0) {
+       // Seed clients if we have an existing selected client
+       api.get(`/clients/${invoice.client_id}`).then((res) => {
+          setClients([res.data])
+       }).catch(() => {})
+    }
+  }, [isEdit, invoice, clients.length])
 
   useEffect(() => {
     let cancelled = false
@@ -50,9 +92,15 @@ function InvoiceForm({ onSuccess }) {
     const timer = setTimeout(async () => {
       try {
         const res = await api.get('/clients', { params: { search: clientSearch } })
-        if (!cancelled) setClients(res.data)
+        if (!cancelled) {
+          setClients((prev) => {
+             const existIds = new Set(res.data.map(c => c.id));
+             const toKeep = prev.filter(c => c.id === form.client_id && !existIds.has(c.id));
+             return [...toKeep, ...res.data];
+          })
+        }
       } catch {
-        if (!cancelled) setClients([])
+        // ignore
       } finally {
         if (!cancelled) setSearchingClients(false)
       }
@@ -61,17 +109,17 @@ function InvoiceForm({ onSuccess }) {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [clientSearch])
+  }, [clientSearch, form.client_id])
 
   useEffect(() => {
     api.get('/auth/me').then((res) => {
       setForm((prev) => ({
         ...prev,
-        business_name: res.data.business_name || '',
-        gst_number: res.data.gst_number || '',
-        address: res.data.address || '',
-        email: res.data.email || '',
-        phone: res.data.phone || '',
+        business_name: prev.business_name || res.data.business_name || '',
+        gst_number: prev.gst_number || res.data.gst_number || '',
+        address: prev.address || res.data.address || '',
+        email: prev.email || res.data.email || '',
+        phone: prev.phone || res.data.phone || '',
       }))
     }).catch(() => {})
   }, [])
@@ -105,6 +153,7 @@ function InvoiceForm({ onSuccess }) {
           email: newClient.email || null,
           phone: newClient.phone || null,
           address: newClient.address || null,
+          state: newClient.state || null,
           gst_number: newClient.gst_number || null,
           company_name: newClient.name,
         })
@@ -127,6 +176,7 @@ function InvoiceForm({ onSuccess }) {
         metadata: {
           notes: form.notes || null,
           terms: form.terms || null,
+          payment_mode: form.payment_mode || null,
           business: {
             business_name: form.business_name || null,
             gst_number: form.gst_number || null,
@@ -137,8 +187,15 @@ function InvoiceForm({ onSuccess }) {
         }
       }
 
-      await api.post('/invoices', payload)
-      onSuccess()
+      if (isEdit) {
+        await api.put(`/invoices/${invoice.id}`, payload)
+        if (window.showToast) window.showToast('Invoice updated successfully!', 'success')
+      } else {
+        await api.post('/invoices', payload)
+        if (window.showToast) window.showToast('Invoice created successfully!', 'success')
+      }
+      
+      if (onSuccess) onSuccess()
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to create invoice.')
     } finally {
@@ -206,6 +263,9 @@ function InvoiceForm({ onSuccess }) {
               </Field>
               <Field label="Client Address" className="md:col-span-2">
                 <input value={newClient.address} onChange={(e) => setNewClient((p) => ({ ...p, address: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+              </Field>
+              <Field label="Client State (Required for GST)" required className="md:col-span-2">
+                <input required value={newClient.state} onChange={(e) => setNewClient((p) => ({ ...p, state: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" placeholder="e.g. Maharashtra" />
               </Field>
             </>
           )}
@@ -317,6 +377,15 @@ function InvoiceForm({ onSuccess }) {
                 line_items: prev.line_items.map((item) => ({ ...item, gst_percent: next }))
               }))
             }} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+          </Field>
+          <Field label="Preferred Payment Mode" className="md:col-span-2">
+            <select value={form.payment_mode} onChange={(e) => setForm((prev) => ({ ...prev, payment_mode: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="UPI">UPI</option>
+              <option value="Cash">Cash</option>
+              <option value="Algorand Crypto">Algorand Crypto</option>
+              <option value="Other">Other</option>
+            </select>
           </Field>
           <Field label="Notes" className="md:col-span-2">
             <textarea rows={3} value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />

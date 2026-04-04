@@ -91,6 +91,10 @@ function drawHeader(doc, invoice, business, fonts) {
     ['Status', statusLabel(invoice.status)]
   ]
 
+  if (invoice.metadata?.payment_mode) {
+    labels.push(['Payment Mode', invoice.metadata.payment_mode])
+  }
+
   for (const [label, value] of labels) {
     doc.font(fonts.bold).fontSize(9).fillColor('#6B7280')
     doc.text(label, rightX, rightY, { width: 90 })

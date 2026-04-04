@@ -144,7 +144,12 @@ async function createInvoiceWithDetails(client, userId, invoiceNumber, attachedC
     const remaining = Number(invoice.total_amount) - paidAmount
     if (remaining <= 0) break
 
-    const amount = Number(faker.number.float({ min: 100, max: remaining, multipleOf: 0.01 }).toFixed(2))
+    let amount;
+    if (remaining <= 100) {
+      amount = Number(remaining.toFixed(2))
+    } else {
+      amount = Number(faker.number.float({ min: 100, max: remaining, multipleOf: 0.01 }).toFixed(2))
+    }
     paidAmount = Number((paidAmount + amount).toFixed(2))
     const method = faker.helpers.arrayElement(['cash', 'bank', 'upi', 'manual'])
     if (capabilities.paymentsHasSourceAndStatus) {

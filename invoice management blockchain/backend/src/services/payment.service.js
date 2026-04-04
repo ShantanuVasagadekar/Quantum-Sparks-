@@ -51,6 +51,16 @@ async function recordPayment(userId, invoiceId, payload) {
       err.status = 400
       throw err
     }
+    // Strict enforcement: payments only allowed on accepted invoices
+    if (!['accepted', 'partial', 'paid'].includes(invoice.status)) {
+      const err = new Error(
+        `Payments can only be recorded on accepted invoices. ` +
+        `Current status is '${invoice.status}'. ` +
+        `Please accept the invoice first.`
+      )
+      err.status = 400
+      throw err
+    }
 
     const amount = Number(payload.amount)
     if (amount > Number(invoice.outstanding_amount)) {

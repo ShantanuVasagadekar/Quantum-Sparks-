@@ -7,10 +7,18 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Enums (safe re-run)
 DO $$ BEGIN
-  CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled');
+  CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'accepted', 'disputed', 'partial', 'paid', 'overdue', 'cancelled');
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Safely add new enum values for existing databases
+DO $$ BEGIN
+  ALTER TYPE invoice_status ADD VALUE IF NOT EXISTS 'accepted' AFTER 'sent';
+EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE invoice_status ADD VALUE IF NOT EXISTS 'disputed' AFTER 'accepted';
+EXCEPTION WHEN others THEN NULL; END $$;
 
 DO $$ BEGIN
   CREATE TYPE payment_method AS ENUM ('cash', 'bank', 'upi', 'algo', 'manual');
@@ -152,6 +160,16 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS algo_anchor_tx_id   TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS algo_anchor_status  TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS version             INT           DEFAULT 1;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS metadata            JSONB;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS portal_token        TEXT DEFAULT gen_random_uuid()::text;
+-- Mutual-agreement acceptance columns
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS accepted_at         TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS accepted_by         TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS acceptance_note     TEXT;
+
+-- Snapshot acceptance in version history
+ALTER TABLE invoice_versions ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+ALTER TABLE invoice_versions ADD COLUMN IF NOT EXISTS accepted_by TEXT;
+
 
 -- ============================================================
 -- INVOICE LINE ITEMS

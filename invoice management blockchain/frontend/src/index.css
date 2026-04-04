@@ -1,23 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   MODERN FINANCE — Design Token System
+   Colors match spec: #F9FAFB bg, #FFFFFF card, #2563EB primary,
+   #111827 text, #6B7280 subtext, #E5E7EB border,
+   #16A34A success, #F59E0B warning, #DC2626 danger
+   ============================================================ */
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  --color-bg:       #F9FAFB;
+  --color-card:     #FFFFFF;
+  --color-primary:  #2563EB;
+  --color-text:     #111827;
+  --color-subtext:  #6B7280;
+  --color-border:   #E5E7EB;
+  --color-success:  #16A34A;
+  --color-warning:  #F59E0B;
+  --color-danger:   #DC2626;
+  --bg-app:         var(--color-bg);
 }
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: #F9FAFB;
-  color: #111827;
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-button,
-a,
-input,
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 select,
 textarea,
 tr {
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }

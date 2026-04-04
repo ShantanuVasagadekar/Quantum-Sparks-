@@ -2,9 +2,17 @@ const crypto = require('crypto')
 
 function resolveInvoiceStatus(invoice) {
   if (invoice.is_cancelled) return 'cancelled'
-  if (Number(invoice.paid_amount) >= Number(invoice.total_amount)) return 'paid'
-  if (invoice.due_date && new Date(invoice.due_date) < startOfToday() && Number(invoice.outstanding_amount) > 0) return 'overdue'
+  if (Number(invoice.paid_amount) >= Number(invoice.total_amount) && Number(invoice.total_amount) > 0) return 'paid'
+  // Overdue: accepted (or sent) past due date with outstanding amount
+  if (
+    invoice.due_date &&
+    new Date(invoice.due_date) < startOfToday() &&
+    Number(invoice.outstanding_amount) > 0 &&
+    ['sent', 'accepted', 'partial'].includes(invoice.status)
+  ) return 'overdue'
+  if (invoice.status === 'disputed') return 'disputed'
   if (Number(invoice.paid_amount) > 0) return 'partial'
+  if (invoice.accepted_at) return 'accepted'
   if (invoice.sent_at) return 'sent'
   return 'draft'
 }

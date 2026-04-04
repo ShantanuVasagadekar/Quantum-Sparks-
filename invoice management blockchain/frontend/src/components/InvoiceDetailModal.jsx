@@ -5,19 +5,29 @@ import api from '../api/client'
 import AlgoPaymentButton from './AlgoPaymentButton'
 import PaymentSourceBadge from './PaymentSourceBadge'
 import PaymentTimeline from './PaymentTimeline'
-import AlgorandBadge from './AlgorandBadge'
 import TxnLink from './TxnLink'
+import VerificationBadge from './VerificationBadge'
+import StatusBadge from './StatusBadge'
 import { useToast } from '../ui/ToastContext'
 import { motion } from 'framer-motion'
 
-function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, anchoring, onPaid }) {
-  const [downloading, setDownloading] = useState(false)
+function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, anchoring, onPaid, onRefresh }) {
+  const [downloading, setDownloading]     = useState(false)
+  const [accepting, setAccepting]         = useState(false)
+  const [disputing, setDisputing]         = useState(false)
+  const [verifying, setVerifying]         = useState(false)
+  const [verifyResult, setVerifyResult]   = useState(null)
   const [reverifyingId, setReverifyingId] = useState('')
   const { showToast } = useToast()
-  const txId = invoice.anchor_tx_id || invoice.algo_anchor_tx_id
-  const hash = invoice.anchor_hash || invoice.invoice_hash
-  const explorerUrl = invoice.anchor_explorer_url || (txId ? `https://testnet.algoexplorer.io/tx/${txId}` : null)
-  const verified = Boolean(txId) && !invoice.anchor_simulated
+
+  const txId       = invoice.algo_anchor_tx_id || invoice.anchor_tx_id
+  const hash       = invoice.anchor_hash || invoice.invoice_hash
+  const explorerUrl = invoice.anchor_explorer_url || (txId && !txId.startsWith('PENDING_') ? `https://testnet.algoexplorer.io/tx/${txId}` : null)
+  const isAnchored  = Boolean(txId) && !txId?.startsWith('PENDING_')
+
+  const canAccept  = ['draft', 'sent'].includes(invoice.status)
+  const canDispute = ['accepted', 'partial'].includes(invoice.status)
+  const canPay     = ['accepted', 'partial'].includes(invoice.status)
 
   const handleDownloadPDF = async () => {
     try {
@@ -44,6 +54,50 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
     }
   }
 
+  const handleAccept = async () => {
+    try {
+      setAccepting(true)
+      await api.post(`/invoices/${invoice.id}/accept`)
+      showToast('Invoice accepted. Anchoring to Algorand…', 'success')
+      if (onRefresh) await onRefresh()
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to accept invoice.', 'error')
+    } finally {
+      setAccepting(false)
+    }
+  }
+
+  const handleDispute = async () => {
+    const reason = window.prompt('Enter a reason for disputing this invoice (optional):')
+    if (reason === null) return // cancelled
+    try {
+      setDisputing(true)
+      await api.post(`/invoices/${invoice.id}/dispute`, { reason })
+      showToast('Invoice marked as disputed.', 'success')
+      if (onRefresh) await onRefresh()
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to dispute invoice.', 'error')
+    } finally {
+      setDisputing(false)
+    }
+  }
+
+  const handleVerify = async () => {
+    try {
+      setVerifying(true)
+      setVerifyResult(null)
+      const res = await api.get(`/invoices/${invoice.id}/verify`)
+      setVerifyResult(res.data)
+      if (res.data.result === 'VERIFIED') showToast('Invoice integrity verified on Algorand ✓', 'success')
+      else if (res.data.result === 'TAMPERED') showToast('WARNING: Invoice data has been tampered!', 'error')
+      else showToast(`Verification result: ${res.data.result}`, 'success')
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Verification request failed.', 'error')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   const reverifyPayment = async (payment) => {
     const paymentTxnId = payment.txn_id || payment.algo_tx_id || payment.reference_number
     try {
@@ -58,135 +112,233 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4" style={{ backdropFilter: 'blur(4px)' }}>
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.2 }}
-        className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl"
+        transition={{ duration: 0.18 }}
+        className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-xl border border-[#E5E7EB] bg-white shadow-xl"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/95 px-6 py-4 backdrop-blur">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900">Invoice Details</h3>
-            <p className="mt-1 text-sm font-medium text-gray-500">{invoice.invoice_number}</p>
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E5E7EB] bg-white px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-[#111827]">Invoice Details</h3>
+              <p className="text-sm text-[#6B7280]">{invoice.invoice_number}</p>
+            </div>
+            <StatusBadge status={invoice.status} />
           </div>
-          <div className="flex gap-3">
-            <button onClick={handleDownloadPDF} disabled={downloading} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
-              {downloading ? 'Preparing PDF...' : 'Download PDF'}
+          <div className="flex gap-2">
+            {invoice.portal_token && (
+              <button onClick={() => {
+                const url = `${window.location.origin}/portal/${invoice.portal_token}`
+                navigator.clipboard.writeText(url)
+                if (window.showToast) window.showToast('Magic link copied to clipboard!', 'success')
+              }}
+                className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 transition-colors">
+                Copy Magic Link
+              </button>
+            )}
+            <button onClick={handleDownloadPDF} disabled={downloading}
+              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-[#111827] hover:bg-gray-50 disabled:opacity-50 transition-colors">
+              {downloading ? 'Preparing…' : 'Download PDF'}
             </button>
-            <button onClick={onClose} className="rounded-md bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Close</button>
+            <button onClick={onClose}
+              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-sm font-medium text-[#111827] hover:bg-gray-50 transition-colors">
+              Close
+            </button>
           </div>
         </div>
 
         <div className="space-y-6 p-6">
+
+          {/* Trust Layer Action Bar */}
+          {(canAccept || canDispute || isAnchored) && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3">
+              <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wide mr-1">Trust Actions:</span>
+
+              {canAccept && (
+                <button onClick={handleAccept} disabled={accepting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#2563EB] px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  {accepting ? (
+                    <><svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Accepting…</>
+                  ) : (
+                    <><svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg> Accept Invoice</>
+                  )}
+                </button>
+              )}
+
+              {canDispute && (
+                <button onClick={handleDispute} disabled={disputing}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#DC2626] bg-white px-3.5 py-2 text-sm font-semibold text-[#DC2626] hover:bg-red-50 disabled:opacity-50 transition-colors">
+                  {disputing ? 'Filing dispute…' : 'Dispute Invoice'}
+                </button>
+              )}
+
+              {isAnchored && (
+                <button onClick={handleVerify} disabled={verifying}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#2563EB] bg-white px-3.5 py-2 text-sm font-semibold text-[#2563EB] hover:bg-blue-50 disabled:opacity-50 transition-colors">
+                  {verifying ? (
+                    <><svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Verifying…</>
+                  ) : (
+                    <><svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg> Verify on Algorand</>
+                  )}
+                </button>
+              )}
+
+              {/* Live verification result */}
+              {verifyResult && (
+                <VerificationBadge invoice={invoice} verifyResult={verifyResult} />
+              )}
+            </div>
+          )}
+
+          {/* Acceptance details */}
+          {invoice.accepted_at && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 flex items-center gap-3">
+              <svg className="h-4 w-4 text-[#2563EB] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm">
+                <span className="font-semibold text-[#2563EB]">Accepted</span>
+                <span className="text-blue-700"> on {formatDateTime(invoice.accepted_at)}</span>
+                {invoice.accepted_by && (
+                  <span className="text-blue-600"> by <span className="font-mono text-xs">{invoice.accepted_by}</span></span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Financial Snapshot */}
           <Section title="Financial Snapshot">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <InfoItem label="Client" value={invoice.client_name || '-'} />
-              <InfoItem label="Issue Date" value={formatDate(invoice.issue_date || invoice.created_at)} />
-              <InfoItem label="Due Date" value={formatDate(invoice.due_date)} />
-              <InfoItem label="Total Base Amount" value={formatCurrency(invoice.total_amount)} />
-              <InfoItem label="Amount Received" value={formatCurrency(invoice.paid_amount)} highlight="green" />
-              <InfoItem label="Amount Pending" value={formatCurrency(invoice.outstanding_amount)} highlight="red" />
+              <InfoItem label="Client"           value={invoice.client_name || '-'} />
+              <InfoItem label="Issue Date"       value={formatDate(invoice.issue_date || invoice.created_at)} />
+              <InfoItem label="Due Date"         value={formatDate(invoice.due_date)} />
+              <InfoItem label="Total Amount"     value={formatCurrency(invoice.total_amount)} />
+              <InfoItem label="Amount Received"  value={formatCurrency(invoice.paid_amount)}  highlight="green" />
+              <InfoItem label="Amount Pending"   value={formatCurrency(invoice.outstanding_amount)} highlight="red" />
+              {invoice.metadata?.payment_mode && (
+                <InfoItem label="Preferred Payment Mode" value={invoice.metadata.payment_mode} />
+              )}
             </div>
           </Section>
 
-          <Section title="Client Contact Information">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <InfoItem label="Client Name" value={invoice.client_name || '-'} />
-              <InfoItem label="Email" value={invoice.client_email || '-'} />
-              <InfoItem label="Phone" value={invoice.client_phone || '-'} />
-              <InfoItem label="Status Label" value={invoice.status || '-'} />
-            </div>
-          </Section>
-
+          {/* Payment History */}
           <Section title="Payment History">
-            <div className="mb-3"><AlgoPaymentButton invoice={invoice} onPaid={onPaid} /></div>
+            {canPay && <div className="mb-3"><AlgoPaymentButton invoice={invoice} onPaid={onPaid} /></div>}
+            {!canPay && invoice.status !== 'paid' && (
+              <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700 font-medium">
+                Payments can only be recorded after the invoice is accepted.
+              </div>
+            )}
             {payments && payments.length > 0 ? (
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <div className="overflow-x-auto rounded-lg border border-[#E5E7EB]">
+                <table className="min-w-full divide-y divide-[#E5E7EB] text-sm">
                   <thead>
-                    <tr className="bg-gray-50 text-left text-gray-500">
-                      <th className="py-3 pl-4 pr-3 font-semibold">Date</th>
-                      <th className="py-3 px-3 font-semibold">Method</th>
-                      <th className="py-3 px-3 font-semibold">Reference</th>
-                      <th className="py-3 px-3 font-semibold">Source</th>
-                      <th className="py-3 px-3 font-semibold">Status</th>
-                      <th className="py-3 px-3 font-semibold">Transaction</th>
-                      <th className="py-3 px-3 font-semibold">Action</th>
-                      <th className="py-3 pl-3 pr-4 text-right font-semibold">Amount</th>
+                    <tr className="bg-[#F9FAFB] text-left text-[#6B7280]">
+                      <th className="py-3 pl-4 pr-3 font-medium">Date</th>
+                      <th className="py-3 px-3 font-medium">Method</th>
+                      <th className="py-3 px-3 font-medium">Reference</th>
+                      <th className="py-3 px-3 font-medium">Source</th>
+                      <th className="py-3 px-3 font-medium">Transaction</th>
+                      <th className="py-3 px-3 font-medium">Action</th>
+                      <th className="py-3 pl-3 pr-4 text-right font-medium">Amount</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody className="divide-y divide-[#E5E7EB] bg-white">
                     {payments.map((payment) => (
                       <tr key={payment.id}>
-                        <td className="py-3 pl-4 pr-3 text-gray-900">{formatDate(payment.payment_date)}</td>
-                        <td className="py-3 px-3 text-gray-600 capitalize">{payment.payment_method || '-'}</td>
-                        <td className="py-3 px-3 text-gray-600">{payment.reference_number || '-'}</td>
+                        <td className="py-3 pl-4 pr-3 text-[#111827]">{formatDate(payment.payment_date)}</td>
+                        <td className="py-3 px-3 text-[#6B7280] capitalize">{payment.payment_method || '-'}</td>
+                        <td className="py-3 px-3 text-[#6B7280]">{payment.reference_number || '-'}</td>
                         <td className="py-3 px-3"><PaymentSourceBadge source={payment.source} method={payment.payment_method} /></td>
-                        <td className="py-3 px-3 text-gray-600 capitalize">{payment.status || (payment.algo_verified ? 'confirmed' : 'pending')}</td>
                         <td className="py-3 px-3">{(payment.source === 'algorand' || payment.payment_method === 'algo') ? <TxnLink txnId={payment.txn_id || payment.algo_tx_id || payment.reference_number} /> : '-'}</td>
                         <td className="py-3 px-3">
                           {(payment.source === 'algorand' || payment.payment_method === 'algo') ? (
-                            <button onClick={() => reverifyPayment(payment)} disabled={reverifyingId === payment.id} className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-300 hover:bg-indigo-50 disabled:opacity-50">
-                              {reverifyingId === payment.id ? 'Re-verifying...' : 'Re-verify'}
+                            <button onClick={() => reverifyPayment(payment)} disabled={reverifyingId === payment.id}
+                              className="rounded border border-[#E5E7EB] bg-white px-2 py-1 text-xs font-medium text-[#2563EB] hover:bg-blue-50 disabled:opacity-50 transition-colors">
+                              {reverifyingId === payment.id ? 'Verifying…' : 'Re-verify'}
                             </button>
                           ) : '-'}
                         </td>
-                        <td className="py-3 pl-3 pr-4 text-right font-medium text-gray-900">{formatCurrency(payment.amount)}</td>
+                        <td className="py-3 pl-3 pr-4 text-right font-semibold text-[#111827]">{formatCurrency(payment.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <div className="rounded-lg border border-gray-200 border-dashed p-6 text-center"><p className="text-sm font-medium text-gray-500">No payment receipts have been recorded yet.</p></div>
+              <div className="rounded-lg border border-dashed border-[#E5E7EB] p-6 text-center">
+                <p className="text-sm text-[#6B7280]">No payment receipts have been recorded yet.</p>
+              </div>
             )}
           </Section>
 
+          {/* Blockchain Verification */}
           <Section title="Blockchain Verification">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="space-y-3 text-sm text-gray-600">
-                <p className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900">Current Status:</span>
-                  {verified ? <AlgorandBadge show /> : <span className="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-semibold text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Unverified / Pending</span>}
-                </p>
-                <div className="break-all rounded bg-white p-2 border border-gray-200">
-                  <span className="block text-xs font-semibold text-gray-500 mb-1">Transaction ID</span>
-                  <span className="font-mono text-xs text-gray-800">{txId || '-'}</span>
-                </div>
-                <div className="break-all rounded bg-white p-2 border border-gray-200">
-                  <span className="block text-xs font-semibold text-gray-500 mb-1">Cryptographic Hash</span>
-                  <span className="font-mono text-xs text-gray-800">{hash || '-'}</span>
-                </div>
-                <div className="pt-2 flex items-center justify-between">
-                  {explorerUrl ? <a href={explorerUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-indigo-600 hover:text-indigo-500">View full block details on Explorer &rarr;</a> : <span />}
-                  {!verified && (
-                    <button onClick={() => onAnchor(invoice.id)} disabled={anchoring} className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
-                      {anchoring ? 'Verifying...' : 'Push Verification to Chain'}
-                    </button>
-                  )}
-                </div>
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[#6B7280]">Anchor State</span>
+                <VerificationBadge invoice={invoice} verifyResult={verifyResult} loading={verifying} />
               </div>
+              <div className="rounded border border-[#E5E7EB] bg-white p-3">
+                <span className="block text-xs font-medium text-[#6B7280] mb-1">Transaction ID</span>
+                <span className="font-mono text-xs text-[#111827] break-all">
+                  {txId && !txId.startsWith('PENDING_') ? txId : '—  Not anchored yet'}
+                </span>
+              </div>
+              <div className="rounded border border-[#E5E7EB] bg-white p-3">
+                <span className="block text-xs font-medium text-[#6B7280] mb-1">Cryptographic Hash (SHA-256)</span>
+                <span className="font-mono text-xs text-[#111827] break-all">{hash || '—'}</span>
+              </div>
+              {explorerUrl && (
+                <a href={explorerUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-[#2563EB] hover:underline">
+                  View transaction on Algorand Explorer
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                </a>
+              )}
             </div>
           </Section>
 
+          {/* Audit Timeline */}
           <Section title="Audit Timeline">
-            <div className="space-y-4">
-              {timeline.map((item, index) => (
-                <div key={`${item.type}-${item.at}-${index}`} className="relative pl-6 before:absolute before:left-2 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-indigo-500 after:absolute after:bottom-[-16px] after:left-[11px] after:top-[12px] after:w-px after:bg-gray-200 last:after:hidden">
-                  <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                    <p className="text-sm font-semibold text-gray-900">{item.label}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{formatDateTime(item.at)}</p>
-                    <TimelineMeta meta={item.meta} />
+            <div className="space-y-3">
+              {timeline.map((item, index) => {
+                const dotColor =
+                  item.type === 'invoice.accepted' ? 'bg-[#2563EB]' :
+                  item.type === 'invoice.anchored' ? 'bg-[#16A34A]' :
+                  item.type === 'invoice.disputed' ? 'bg-orange-500' :
+                  item.type.startsWith('payment') ? 'bg-[#F59E0B]' :
+                  'bg-[#6B7280]'
+
+                return (
+                  <div key={`${item.type}-${item.at}-${index}`}
+                    className="relative pl-7 before:absolute before:left-2.5 before:top-2 before:h-2 before:w-2 before:rounded-full before:content-[''] after:absolute after:bottom-[-12px] after:left-[13px] after:top-[12px] after:w-px after:bg-[#E5E7EB] after:content-[''] last:after:hidden"
+                    style={{ '--dot-color': dotColor }}
+                  >
+                    <span className={`absolute left-2.5 top-2 h-2 w-2 rounded-full ${dotColor}`} />
+                    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4">
+                      <p className="text-sm font-semibold text-[#111827]">{item.label}</p>
+                      <p className="mt-0.5 text-xs text-[#6B7280]">{formatDateTime(item.at)}</p>
+                      <TimelineMeta meta={item.meta} />
+                    </div>
                   </div>
-                </div>
-              ))}
-              {timeline.length === 0 && <p className="text-sm text-gray-500 italic">No historical events recorded.</p>}
+                )
+              })}
+              {timeline.length === 0 && (
+                <p className="text-sm text-[#6B7280] italic">No historical events recorded.</p>
+              )}
             </div>
           </Section>
+
           <Section title="Payment Timeline">
             <PaymentTimeline payments={payments} />
           </Section>
+
         </div>
       </motion.div>
     </div>
@@ -196,7 +348,7 @@ function InvoiceDetailModal({ invoice, timeline, payments, onAnchor, onClose, an
 function Section({ title, children }) {
   return (
     <section>
-      <h4 className="mb-3 text-sm font-bold tracking-wide text-gray-900 uppercase">{title}</h4>
+      <h4 className="mb-3 text-xs font-semibold tracking-widest text-[#6B7280] uppercase">{title}</h4>
       {children}
     </section>
   )
@@ -204,25 +356,23 @@ function Section({ title, children }) {
 
 function InfoItem({ label, value, highlight }) {
   const isGreen = highlight === 'green'
-  const isRed = highlight === 'red'
-  
+  const isRed   = highlight === 'red'
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm ${isGreen ? 'border-green-200' : ''} ${isRed ? 'border-red-200' : ''}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${isGreen ? 'text-green-700' : isRed ? 'text-red-700' : 'text-gray-900'}`}>{value}</p>
+    <div className={`rounded-lg border bg-white p-4 ${isGreen ? 'border-green-200' : isRed ? 'border-red-200' : 'border-[#E5E7EB]'}`}>
+      <p className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${isGreen ? 'text-[#16A34A]' : isRed ? 'text-[#DC2626]' : 'text-[#111827]'}`}>{value}</p>
     </div>
   )
 }
 
 function TimelineMeta({ meta }) {
   if (!meta) return null
-  const entries = Object.entries(meta).filter(([, value]) => value !== null && value !== undefined && value !== '')
+  const entries = Object.entries(meta).filter(([, v]) => v !== null && v !== undefined && v !== '')
   if (entries.length === 0) return null
-
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="mt-2 flex flex-wrap gap-2">
       {entries.map(([key, value]) => (
-        <span key={key} className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
+        <span key={key} className="inline-flex items-center rounded border border-[#E5E7EB] bg-[#F9FAFB] px-2 py-0.5 text-xs font-medium text-[#6B7280]">
           {key}: {key.includes('amount') ? formatCurrency(value) : String(value)}
         </span>
       ))}

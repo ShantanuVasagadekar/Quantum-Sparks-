@@ -93,7 +93,7 @@ function ClientsPage({ refreshToken }) {
           </button>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 hover:scale-105 active:scale-95 transition-all"
           >
             {showForm ? 'Cancel' : '+ Add Client'}
           </button>
@@ -125,7 +125,7 @@ function ClientsPage({ refreshToken }) {
               </label>
             </div>
             {formError && <p className="text-sm text-red-600">{formError}</p>}
-            <button type="submit" disabled={formLoading} className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 disabled:opacity-50">
+            <button type="submit" disabled={formLoading} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 hover:scale-105 active:scale-95 disabled:scale-100 disabled:opacity-50 transition-all">
               {formLoading ? 'Saving...' : 'Save Client'}
             </button>
           </form>
@@ -164,12 +164,12 @@ function ClientsPage({ refreshToken }) {
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {currentRows.map((client) => (
-                  <tr key={client.id} className="transition-colors hover:bg-gray-50/50">
-                    <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{client.name}</td>
-                    <td className="py-4 px-4 text-gray-600">{client.company_name || '-'}</td>
-                    <td className="py-4 px-4 text-gray-500">{client.phone || '-'}</td>
+                  <tr key={client.id} className="transition-all hover:bg-emerald-50/50 hover:shadow-sm cursor-default">
+                    <td className="py-4 pl-6 pr-4 font-bold text-gray-900">{client.name}</td>
+                    <td className="py-4 px-4 font-semibold text-gray-600">{client.company_name || '-'}</td>
+                    <td className="py-4 px-4 text-gray-500 font-medium">{client.phone || '-'}</td>
                     <td className="py-4 px-4 text-gray-500">{client.state || '-'}</td>
-                    <td className="py-4 px-4 text-gray-500">{client.email || '-'}</td>
+                    <td className="py-4 px-4 text-emerald-700 font-medium">{client.email || '-'}</td>
                   </tr>
                 ))}
               </tbody>

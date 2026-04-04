@@ -21,15 +21,15 @@ const signupSchema = z.object({
 })
 
 const updateProfileSchema = z.object({
-  business_name: z.string().optional(),
-  owner_name: z.string().optional(),
-  gst_number: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid Indian GST Number').optional().or(z.literal('')),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  pincode: z.string().optional(),
-  algo_wallet_address: z.string().optional()
+  business_name: z.string().optional().nullable(),
+  owner_name: z.string().optional().nullable(),
+  gst_number: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid Indian GST Number').optional().nullable().or(z.literal('')),
+  phone: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  pincode: z.string().optional().nullable(),
+  algo_wallet_address: z.string().optional().nullable()
 })
 
 const loginSchema = z.object({
@@ -168,8 +168,10 @@ async function updateProfile(req, res, next) {
 
     res.json(rows[0])
   } catch (error) {
-    if (error && error.issues) {
-      return res.status(400).json({ error: 'Validation error', details: error.issues })
+    if (error && error.issues && error.issues.length > 0) {
+      const msg = error.issues[0].message
+      const path = error.issues[0].path.join('.')
+      return res.status(400).json({ error: `Validation error on ${path}: ${msg}` })
     }
     next(error)
   }

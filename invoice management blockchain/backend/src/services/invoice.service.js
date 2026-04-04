@@ -270,27 +270,6 @@ async function createInvoice(userId, payload) {
       [invoice.id, JSON.stringify({ invoice_id: invoice.id, status: invoice.status })]
     )
 
-    const insertedLineItemsRes = await clientConn.query(
-      `SELECT description, quantity, unit_price
-       FROM invoice_line_items
-       WHERE invoice_id = $1
-       ORDER BY sort_order ASC, created_at ASC`,
-      [invoice.id]
-    )
-    const hash = computeInvoiceHash(invoice, insertedLineItemsRes.rows)
-    const mockTxId = `PENDING_${Date.now()}_${Math.floor(Math.random() * 10000)}`
-    await clientConn.query(
-      `UPDATE invoices
-       SET invoice_hash = $2,
-           anchor_hash = $2,
-           algo_anchor_tx_id = $3,
-           anchor_tx_id = $3,
-           algo_anchor_status = 'pending_anchor',
-           updated_at = now()
-       WHERE id = $1`,
-      [invoice.id, hash, mockTxId]
-    )
-
     await clientConn.query('COMMIT')
     realtime.emit('invoice.created', {
       userId,
@@ -325,14 +304,22 @@ async function updateInvoice(userId, invoiceId, payload) {
       err.status = 400
       throw err
     }
+    if (current.status === 'disputed') {
+      const err = new Error('Disputed invoice must be resolved before editing')
+      err.status = 400
+      throw err
+    }
 
-    const isAnchored = !!(current.algo_anchor_tx_id || current.anchor_tx_id)
-    
-    // 1. Snapshot current state into invoice_versions if it is already anchored
-    if (isAnchored) {
+    // An invoice is considered truly anchored if the txId is NOT a placeholder
+    const rawTxId = current.algo_anchor_tx_id || current.anchor_tx_id
+    const isAnchored = !!(rawTxId && !rawTxId.startsWith('PENDING_') && !rawTxId.startsWith('SIM_'))
+    const wasAccepted = !!current.accepted_at
+
+    // 1. Snapshot current state into invoice_versions if it was accepted/anchored
+    if (wasAccepted || isAnchored) {
       await clientConn.query(
-        `INSERT INTO invoice_versions (invoice_id, version, invoice_number, total_amount, due_date, invoice_hash, algo_anchor_tx_id, line_items_snapshot)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+        `INSERT INTO invoice_versions (invoice_id, version, invoice_number, total_amount, due_date, invoice_hash, algo_anchor_tx_id, line_items_snapshot, accepted_at, accepted_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)`,
         [
           invoiceId,
           current.version || 1,
@@ -341,7 +328,9 @@ async function updateInvoice(userId, invoiceId, payload) {
           current.due_date,
           current.invoice_hash || current.anchor_hash,
           current.algo_anchor_tx_id || current.anchor_tx_id,
-          JSON.stringify(current.line_items || [])
+          JSON.stringify(current.line_items || []),
+          current.accepted_at || null,
+          current.accepted_by || null
         ]
       )
     }
@@ -358,6 +347,7 @@ async function updateInvoice(userId, invoiceId, payload) {
     }
     const nextStatus = resolveInvoiceStatus(invoiceDraft)
 
+    const needsReset = wasAccepted || isAnchored
     const { rows } = await clientConn.query(
       `UPDATE invoices
        SET title = COALESCE($3, title),
@@ -367,16 +357,17 @@ async function updateInvoice(userId, invoiceId, payload) {
            sent_at = $7,
            status = $8,
            version = COALESCE(version, 1) + CASE WHEN $9::boolean THEN 1 ELSE 0 END,
-           invoice_hash = CASE WHEN $9::boolean THEN NULL ELSE invoice_hash END,
-           algo_anchor_tx_id = CASE WHEN $9::boolean THEN NULL ELSE algo_anchor_tx_id END,
-           algo_anchor_status = CASE WHEN $9::boolean THEN 'pending_anchor' ELSE algo_anchor_status END,
-           anchor_hash = CASE WHEN $9::boolean THEN NULL ELSE anchor_hash END,
-           anchor_tx_id = CASE WHEN $9::boolean THEN NULL ELSE anchor_tx_id END,
-           anchored_at = CASE WHEN $9::boolean THEN NULL ELSE anchored_at END,
+           invoice_hash         = CASE WHEN $9::boolean THEN NULL ELSE invoice_hash END,
+           algo_anchor_tx_id    = CASE WHEN $9::boolean THEN NULL ELSE algo_anchor_tx_id END,
+           algo_anchor_status   = CASE WHEN $9::boolean THEN NULL ELSE algo_anchor_status END,
+           anchor_hash          = CASE WHEN $9::boolean THEN NULL ELSE anchor_hash END,
+           anchor_tx_id         = CASE WHEN $9::boolean THEN NULL ELSE anchor_tx_id END,
+           anchored_at          = CASE WHEN $9::boolean THEN NULL ELSE anchored_at END,
+           anchor_simulated     = CASE WHEN $9::boolean THEN false ELSE anchor_simulated END,
            updated_at = now()
        WHERE user_id = $1 AND id = $2
        RETURNING *`,
-      [userId, invoiceId, payload.title, payload.description, payload.due_date, payload.total_amount, nextSentAt, nextStatus, isAnchored]
+      [userId, invoiceId, payload.title, payload.description, payload.due_date, payload.total_amount, nextSentAt, nextStatus, needsReset]
     )
 
     // 3. Update line items if provided in payload
@@ -440,13 +431,12 @@ async function updateInvoice(userId, invoiceId, payload) {
 
     await clientConn.query('COMMIT')
 
-    // 4. Trigger auto re-anchor if it was previously anchored
-    if (isAnchored) {
-      anchorInvoice(userId, invoiceId).catch(err => {
-        console.error('Auto-reanchor failed:', err)
+    // After edit, invoice requires re-anchoring if it was originally anchored
+    if (needsReset) {
+      anchorInvoiceToAlgorand(userId, invoiceId).catch((err) => {
+        console.error('Failed to auto re-anchor edited invoice', err)
       })
     }
-
     realtime.emit('invoice.updated', {
       userId,
       invoiceId,
@@ -538,6 +528,157 @@ async function cancelInvoice(userId, invoiceId) {
   }
 }
 
+async function acceptInvoice(userId, invoiceId, { accepted_by, acceptance_note } = {}) {
+  const clientConn = await pool.connect()
+  try {
+    await clientConn.query('BEGIN')
+    const { rows: invRows } = await clientConn.query(
+      `SELECT i.*, c.name AS client_name FROM invoices i
+       JOIN clients c ON c.id = i.client_id
+       WHERE i.user_id = $1 AND i.id = $2 FOR UPDATE`,
+      [userId, invoiceId]
+    )
+    const invoice = invRows[0]
+    if (!invoice) {
+      const err = new Error('Invoice not found'); err.status = 404; throw err
+    }
+    if (invoice.is_cancelled) {
+      const err = new Error('Cannot accept a cancelled invoice'); err.status = 400; throw err
+    }
+    if (!['sent', 'draft'].includes(invoice.status)) {
+      const err = new Error(`Invoice cannot be accepted from status '${invoice.status}'`); err.status = 400; throw err
+    }
+
+    const { rows } = await clientConn.query(
+      `UPDATE invoices
+       SET status = 'accepted',
+           accepted_at = now(),
+           accepted_by = $3,
+           acceptance_note = $4,
+           sent_at = COALESCE(sent_at, now()),
+           updated_at = now()
+       WHERE user_id = $1 AND id = $2
+       RETURNING *`,
+      [userId, invoiceId, accepted_by || null, acceptance_note || null]
+    )
+
+    await clientConn.query(
+      `INSERT INTO invoice_events (invoice_id, event_type, event_payload)
+       VALUES ($1, 'invoice.accepted', $2::jsonb)`,
+      [invoiceId, JSON.stringify({ invoice_id: invoiceId, accepted_by: accepted_by || null, status: 'accepted' })]
+    )
+    await clientConn.query('COMMIT')
+
+    realtime.emit('invoice.accepted', { userId, invoiceId, status: 'accepted' })
+
+    // Trigger blockchain anchoring now that invoice is accepted
+    anchorInvoice(userId, invoiceId).catch(err => {
+      console.error('[invoice.service] Post-acceptance anchor failed:', err.message)
+    })
+
+    return rows[0]
+  } catch (error) {
+    await clientConn.query('ROLLBACK')
+    throw error
+  } finally {
+    clientConn.release()
+  }
+}
+
+async function disputeInvoice(userId, invoiceId, { reason } = {}) {
+  const clientConn = await pool.connect()
+  try {
+    await clientConn.query('BEGIN')
+    const { rows: invRows } = await clientConn.query(
+      `SELECT * FROM invoices WHERE user_id = $1 AND id = $2 FOR UPDATE`,
+      [userId, invoiceId]
+    )
+    const invoice = invRows[0]
+    if (!invoice) {
+      const err = new Error('Invoice not found'); err.status = 404; throw err
+    }
+    if (!['accepted', 'partial'].includes(invoice.status)) {
+      const err = new Error(`Only accepted invoices can be disputed (current: '${invoice.status}')`)
+      err.status = 400; throw err
+    }
+
+    const { rows } = await clientConn.query(
+      `UPDATE invoices
+       SET status = 'disputed',
+           updated_at = now()
+       WHERE user_id = $1 AND id = $2
+       RETURNING *`,
+      [userId, invoiceId]
+    )
+
+    await clientConn.query(
+      `INSERT INTO invoice_events (invoice_id, event_type, event_payload)
+       VALUES ($1, 'invoice.disputed', $2::jsonb)`,
+      [invoiceId, JSON.stringify({ invoice_id: invoiceId, reason: reason || null, status: 'disputed' })]
+    )
+    await clientConn.query('COMMIT')
+    realtime.emit('invoice.updated', { userId, invoiceId, status: 'disputed' })
+    return rows[0]
+  } catch (error) {
+    await clientConn.query('ROLLBACK')
+    throw error
+  } finally {
+    clientConn.release()
+  }
+}
+
+async function verifyInvoice(userId, invoiceId) {
+  const invoice = await getInvoiceById(userId, invoiceId)
+  if (!invoice) {
+    const err = new Error('Invoice not found'); err.status = 404; throw err
+  }
+
+  const { verifyInvoiceOnChain } = require('./algorand.service')
+  const { computeInvoiceHash } = require('../utils/invoice.util')
+
+  const txId = invoice.algo_anchor_tx_id || invoice.anchor_tx_id
+  const storedHash = invoice.invoice_hash || invoice.anchor_hash
+
+  // Treat PENDING_ prefixes as not anchored
+  if (!txId || txId.startsWith('PENDING_')) {
+    return { result: 'NOT_ANCHORED', anchored: false, txId: null, hash: storedHash || null, checkedAt: new Date().toISOString() }
+  }
+  if (txId.startsWith('SIM_')) {
+    return { result: 'SIMULATED', anchored: false, txId, hash: storedHash, checkedAt: new Date().toISOString(), message: 'Simulated anchoring — not a real blockchain transaction' }
+  }
+
+  // Recompute hash from current live data
+  const recomputedHash = computeInvoiceHash(invoice, invoice.line_items)
+
+  // Check for local tampering first (fast path)
+  if (storedHash && recomputedHash !== storedHash) {
+    return {
+      result: 'TAMPERED',
+      anchored: true,
+      txId,
+      hash: recomputedHash,
+      storedHash,
+      checkedAt: new Date().toISOString(),
+      message: 'Invoice data has been modified since anchoring'
+    }
+  }
+
+  // Validate against Algorand on-chain
+  const chainResult = await verifyInvoiceOnChain(txId, invoice, invoice.line_items)
+
+  return {
+    result: chainResult.verified ? 'VERIFIED' : 'TAMPERED',
+    anchored: true,
+    txId,
+    hash: recomputedHash,
+    onChainHash: chainResult.onChainHash,
+    explorerUrl: invoice.anchor_explorer_url,
+    verifiedAt: chainResult.verified ? new Date().toISOString() : null,
+    checkedAt: new Date().toISOString(),
+    message: chainResult.message
+  }
+}
+
 async function anchorInvoice(userId, invoiceId) {
   const invoice = await getInvoiceById(userId, invoiceId)
   if (!invoice) {
@@ -546,6 +687,14 @@ async function anchorInvoice(userId, invoiceId) {
     throw err
   }
 
+  // Strict enforcement: only anchor accepted invoices
+  if (!['accepted', 'partial', 'paid'].includes(invoice.status)) {
+    const err = new Error(`Anchoring is only allowed for accepted invoices (current status: '${invoice.status}')`)
+    err.status = 400
+    throw err
+  }
+
+  console.log(`[anchor] Starting anchor for invoice ${invoiceId} (status: ${invoice.status})`)
   const tx = await anchorInvoiceToAlgorand(invoice, invoice.line_items)
 
   const { rows } = await pool.query(
@@ -570,6 +719,7 @@ async function anchorInvoice(userId, invoiceId) {
     [invoiceId, JSON.stringify({ invoice_id: invoiceId, hash: tx.hash, tx_id: tx.txId, simulated: tx.simulated })]
   )
 
+  console.log(`[anchor] Invoice ${invoiceId} anchored. txId=${tx.txId} simulated=${tx.simulated}`)
   realtime.emit('anchor.confirmed', {
     userId,
     invoiceId,
@@ -617,7 +767,9 @@ async function generateReminder(userId, invoiceId) {
     year: 'numeric'
   })
 
-  const message = `Hi ${invoice.client_name},\n\nThis is a reminder for invoice ${invoice.invoice_number}.\n\nTotal amount: INR ${totalAmount}\nOutstanding amount: INR ${outstandingAmount}\nDue date: ${dueDate}\n\nPlease share payment update.\n\nThank you.`
+  const portalLink = invoice.portal_token ? `http://localhost:5173/portal/${invoice.portal_token}` : '';
+
+  const message = `Hi ${invoice.client_name},\n\nThis is a reminder for invoice ${invoice.invoice_number}.\n\nTotal amount: INR ${totalAmount}\nOutstanding amount: INR ${outstandingAmount}\nDue date: ${dueDate}\n\nPlease click the secure magic link below to review and pay the invoice:\n${portalLink}\n\nThank you.`
 
   let emailSent = false;
   if (invoice.client_email) {
@@ -828,7 +980,10 @@ module.exports = {
   updateInvoice,
   sendInvoice,
   cancelInvoice,
+  acceptInvoice,
+  disputeInvoice,
   anchorInvoice,
+  verifyInvoice,
   getInvoiceEvents,
   generateReminder,
   getInvoiceTimeline,

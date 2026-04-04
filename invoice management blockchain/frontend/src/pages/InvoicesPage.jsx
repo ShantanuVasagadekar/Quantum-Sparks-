@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import api from '../api/client'
 import InvoiceDetailModal from '../components/InvoiceDetailModal'
 import PaymentModal from '../components/PaymentModal'
 import StatusBadge from '../components/StatusBadge'
-import AlgorandBadge from '../components/AlgorandBadge'
-import TxnLink from '../components/TxnLink'
 import { formatCurrency, formatDate } from '../utils/format'
 import { useToast } from '../ui/ToastContext'
 
@@ -19,6 +17,7 @@ function InvoicesPage({ refreshToken }) {
   const [detailTimeline, setDetailTimeline] = useState([])
   const [detailPayments, setDetailPayments] = useState([])
   const [anchoring, setAnchoring] = useState(false)
+  const [acceptingId, setAcceptingId] = useState('')
   const [copiedInvoiceId, setCopiedInvoiceId] = useState('')
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -61,6 +60,20 @@ function InvoicesPage({ refreshToken }) {
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to send reminder message.')
+    }
+  }
+
+  async function acceptInvoice(invoiceId) {
+    try {
+      setAcceptingId(invoiceId)
+      await api.post(`/invoices/${invoiceId}/accept`)
+      showToast('Invoice accepted. Anchoring to Algorand…', 'success')
+      await fetchInvoices()
+      if (detailInvoice?.id === invoiceId) await openDetail(invoiceId)
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to accept invoice.', 'error')
+    } finally {
+      setAcceptingId('')
     }
   }
 
@@ -131,10 +144,10 @@ function InvoicesPage({ refreshToken }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
+      <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
         <div className="space-y-2">
           {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-12 animate-pulse rounded-md bg-slate-800" />
+            <div key={item} className="h-12 animate-pulse rounded-md bg-gray-100" />
           ))}
         </div>
       </div>
@@ -149,21 +162,26 @@ function InvoicesPage({ refreshToken }) {
           <p className="mt-1 text-sm text-gray-500">Manage collections and invoice-level actions.</p>
         </div>
         <div className="flex items-center gap-2">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-md border border-[#E5E7EB] bg-white px-2 py-1.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#2563EB]">
             <option value="all">All statuses</option>
+            <option value="accepted">Accepted</option>
             <option value="paid">Paid</option>
             <option value="partial">Partial</option>
             <option value="overdue">Overdue</option>
             <option value="sent">Sent</option>
             <option value="draft">Draft</option>
+            <option value="disputed">Disputed</option>
           </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+            className="rounded-md border border-[#E5E7EB] bg-white px-2 py-1.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#2563EB]">
             <option value="due_date">Sort: Due date</option>
             <option value="total_amount">Sort: Total amount</option>
             <option value="status">Sort: Status</option>
           </select>
-          <button onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
-            {sortDir === 'asc' ? 'Asc' : 'Desc'}
+          <button onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}
+            className="rounded-md border border-[#E5E7EB] bg-white px-2 py-1.5 text-sm text-[#111827] hover:bg-gray-50">
+            {sortDir === 'asc' ? '↑ Asc' : '↓ Desc'}
           </button>
         </div>
       </div>
@@ -200,55 +218,75 @@ function InvoicesPage({ refreshToken }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                {rows.map((invoice) => (
-                  <tr key={invoice.id} className="transition-colors hover:bg-gray-50/50">
-                    <td className="py-4 pl-6 pr-4 font-medium text-gray-900">{invoice.invoice_number}</td>
-                    <td className="py-4 px-4 text-gray-600">{invoice.client_name}</td>
-                    <td className="py-4 px-4 text-gray-500">{formatDate(invoice.due_date)}</td>
-                    <td className="py-4 px-4 text-right text-gray-900">{formatCurrency(invoice.total_amount)}</td>
-                    <td className="py-4 px-4 text-right text-gray-500">{formatCurrency(invoice.paid_amount)}</td>
-                    <td className="py-4 px-4 text-right font-medium text-gray-900">{formatCurrency(invoice.outstanding_amount)}</td>
-                    <td className="py-4 px-4"><StatusBadge status={invoice.status} /></td>
-                    <td className="py-4 px-4">
-                      {invoice.algo_anchor_tx_id || invoice.anchor_tx_id ? (
-                        <div className="flex items-center gap-2">
-                          <AlgorandBadge show />
-                          <TxnLink txnId={invoice.algo_anchor_tx_id || invoice.anchor_tx_id} />
+                  {rows.map((invoice) => {
+                    const canAccept = invoice.status === 'sent' || invoice.status === 'draft'
+                    const canPay    = ['accepted', 'partial'].includes(invoice.status)
+                    return (
+                    <tr key={invoice.id} className="transition-colors hover:bg-gray-50 cursor-default">
+                      <td className="py-4 pl-6 pr-4 font-semibold text-[#111827]">{invoice.invoice_number}</td>
+                      <td className="py-4 px-4 text-[#6B7280]">{invoice.client_name}</td>
+                      <td className="py-4 px-4 text-[#6B7280]">{formatDate(invoice.due_date)}</td>
+                      <td className="py-4 px-4 text-right font-semibold text-[#111827]">{formatCurrency(invoice.total_amount)}</td>
+                      <td className="py-4 px-4 text-right text-[#6B7280]">{formatCurrency(invoice.paid_amount)}</td>
+                      <td className="py-4 px-4 text-right font-semibold text-[#111827]">{formatCurrency(invoice.outstanding_amount)}</td>
+                      <td className="py-4 px-4"><StatusBadge status={invoice.status} /></td>
+                      <td className="py-4 px-4">
+                        {invoice.algo_anchor_tx_id && !invoice.algo_anchor_tx_id.startsWith('PENDING_') ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-[#2563EB]">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                            Anchored
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#6B7280]">Not anchored</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canAccept && (
+                            <button
+                              onClick={() => acceptInvoice(invoice.id)}
+                              disabled={acceptingId === invoice.id}
+                              className="rounded-md bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                              {acceptingId === invoice.id ? 'Accepting…' : 'Accept'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => canPay ? setSelectedInvoice(invoice) : showToast('Accept the invoice before recording a payment.', 'error')}
+                            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              canPay
+                                ? 'border-[#E5E7EB] bg-white text-[#111827] hover:bg-gray-50'
+                                : 'border-[#E5E7EB] bg-white text-[#6B7280] cursor-not-allowed opacity-60'
+                            }`}
+                            title={!canPay ? 'Invoice must be accepted first' : ''}
+                          >
+                            Add Payment
+                          </button>
+                          {invoice.status !== 'cancelled' && invoice.status !== 'disputed' && (
+                            <Link
+                              to={`/invoices/${invoice.id}/edit`}
+                              className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] hover:bg-gray-50 transition-colors"
+                            >
+                              Edit
+                            </Link>
+                          )}
+                          <button
+                            onClick={() => sendReminder(invoice.id)}
+                            className="rounded-md border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#111827] hover:bg-gray-50 transition-colors"
+                          >
+                            {copiedInvoiceId === invoice.id ? 'Sent ✓' : 'Remind'}
+                          </button>
+                          <button
+                            onClick={() => openDetail(invoice.id)}
+                            className="rounded-md bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                          >
+                            View
+                          </button>
                         </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">Not anchored</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => setSelectedInvoice(invoice)}
-                          className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                        >
-                          Add Payment
-                        </button>
-                        <button
-                          onClick={() => sendReminder(invoice.id)}
-                          className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                        >
-                          {copiedInvoiceId === invoice.id ? 'Sent/Copied' : 'Send Reminder'}
-                        </button>
-                        <button
-                          onClick={() => verifyInvoice(invoice.id)}
-                          className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                        >
-                          Verify
-                        </button>
-                        <button
-                          onClick={() => openDetail(invoice.id)}
-                          className="rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                    )
+                  })}
               </tbody>
             </table>
           </div>
@@ -289,6 +327,10 @@ function InvoicesPage({ refreshToken }) {
           payments={detailPayments}
           anchoring={anchoring}
           onAnchor={verifyInvoice}
+          onRefresh={async () => {
+            await fetchInvoices()
+            await openDetail(detailInvoice.id)
+          }}
           onPaid={async () => {
             await fetchInvoices()
             await openDetail(detailInvoice.id)

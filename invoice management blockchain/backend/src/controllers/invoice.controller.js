@@ -117,6 +117,35 @@ async function anchor(req, res, next) {
   }
 }
 
+async function accept(req, res, next) {
+  try {
+    const { accepted_by, acceptance_note } = req.body || {}
+    const data = await invoiceService.acceptInvoice(req.user.id, req.params.id, { accepted_by, acceptance_note })
+    res.json(data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function dispute(req, res, next) {
+  try {
+    const { reason } = req.body || {}
+    const data = await invoiceService.disputeInvoice(req.user.id, req.params.id, { reason })
+    res.json(data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function verify(req, res, next) {
+  try {
+    const data = await invoiceService.verifyInvoice(req.user.id, req.params.id)
+    res.json(data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 async function events(req, res, next) {
   try {
     const data = await invoiceService.getInvoiceEvents(req.user.id, req.params.id)
@@ -172,6 +201,9 @@ module.exports = {
   send,
   cancel,
   anchor,
+  accept,
+  dispute,
+  verify,
   events,
   reminder,
   timeline,

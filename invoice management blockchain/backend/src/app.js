@@ -12,6 +12,7 @@ const dashboardRoutes = require('./routes/dashboard.routes')
 const blockchainRoutes = require('./routes/blockchain.routes')
 const eventRoutes = require('./routes/event.routes')
 const userRoutes = require('./routes/user.routes')
+const portalRoutes = require('./routes/portal.routes')
 
 const app = express()
 
@@ -31,6 +32,7 @@ app.get('/', (req, res) => {
 
 // Public routes (no JWT required)
 app.use('/api/auth', authRoutes)
+app.use('/api/portal', portalRoutes)
 
 // SSE route (uses query-param JWT via its own middleware)
 app.use('/api/events', eventRoutes)
